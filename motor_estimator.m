@@ -9,18 +9,17 @@ classdef motor_estimator
         dt;
         dt2; % dt squared
         
-        Sigma_i = [1, 0, 0, 0, 0, 0, 0, 0, 0, 0;  % sigma_vx
-            0, 1, 0, 0, 0, 0, 0, 0, 0, 0;  % sigma_vy
-            0, 0, 1, 0, 0, 0, 0, 0, 0, 0;  % sigma_vz
-            0, 0, 0, 1, 0, 0, 0, 0, 0, 0;  % sigma_px
-            0, 0, 0, 0, 1, 0, 0, 0, 0, 0;  % sigma_py
-            0, 0, 0, 0, 0, 1, 0, 0, 0, 0;  % sigma_pz
-            0, 0, 0, 0, 0, 0, 1, 0, 0, 0;  % sigma_Wx
-            0, 0, 0, 0, 0, 0, 0, 1, 0, 0;  % sigma_Wy
-            0, 0, 0, 0, 0, 0, 0, 0, 1, 0;  % sigma_Wz
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 1]; % sigma_R
-        Sigma = [];
-        Sigma_inv = [];
+        G_i = [1, 0, 0, 0, 0, 0, 0, 0, 0, 0;  % G_vx
+            0, 1, 0, 0, 0, 0, 0, 0, 0, 0;  % G_vy
+            0, 0, 1, 0, 0, 0, 0, 0, 0, 0;  % G_vz
+            0, 0, 0, 1, 0, 0, 0, 0, 0, 0;  % G_px
+            0, 0, 0, 0, 1, 0, 0, 0, 0, 0;  % G_py
+            0, 0, 0, 0, 0, 1, 0, 0, 0, 0;  % G_pz
+            0, 0, 0, 0, 0, 0, 1, 0, 0, 0;  % G_Wx
+            0, 0, 0, 0, 0, 0, 0, 1, 0, 0;  % G_Wy
+            0, 0, 0, 0, 0, 0, 0, 0, 1, 0;  % G_Wz
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 1]; % G_R
+        G = [];
         
         lower_bound = 0;
         higher_bound = 1.1;
@@ -33,9 +32,8 @@ classdef motor_estimator
             obj.dt2 = dt^2;
             
             for i = 1:obj.n-1
-                obj.Sigma = blkdiag(obj.Sigma, obj.Sigma_i);
+                obj.G = blkdiag(obj.G, obj.G_i);
             end
-            obj.Sigma_inv = inv(obj.Sigma);
             
             ret = obj;
         end
@@ -192,7 +190,7 @@ classdef motor_estimator
                     Jf_t = Jf.';
                     
                     % Skip Degenerate Jacobian due to insufficient excitement of the trajectory
-                    rcond_JtJ = rcond(Jf.'*obj.Sigma_inv*Jf);
+                    rcond_JtJ = rcond(Jf.'*obj.G*Jf);
                     if rcond_JtJ < 1e-4
                         fprintf('x: Degenerate Jacobian detected – skip this time step');
                         x = x0;
@@ -207,7 +205,7 @@ classdef motor_estimator
                     
                     % Calculate Gauss-Newton Step
                     residual_f = lambda * calc_residual_vector(obj, batch.m, batch.J, x, batch.f_motors, batch.v, batch.p, batch.W, batch.R);
-                    delta_x = -(Jf_t*obj.Sigma_inv*Jf + H) \ (Jf_t*obj.Sigma_inv*residual_f + g);
+                    delta_x = -(Jf_t*obj.G*Jf + H) \ (Jf_t*obj.G*residual_f + g);
                     
                     % Update x
                     x_last = x;
