@@ -2,7 +2,7 @@ classdef motor_estimator
     properties
         math;
         
-        n = 100; % Number of trajectory points (-1 for # of segments)
+        n = 10; % Number of trajectory points (-1 for # of segments)
         I = eye(3);
         g = 9.8;
         e3 = [0; 0; 1];
@@ -21,6 +21,9 @@ classdef motor_estimator
             0, 0, 0, 0, 0, 0, 0, 0, 0, 1]; % sigma_R
         Sigma = [];
         Sigma_inv = [];
+        
+        lower_bound = 0;
+        higher_bound = 1.1;
     end
     
     methods
@@ -49,6 +52,22 @@ classdef motor_estimator
             
             batch.m = data.m;
             batch.J = data.J;
+        end
+        
+        function ret = calc_log_barrier_gradient(obj, x)
+            ret = ...
+                [1/(obj.higher_bound - x(1)) - 1/(x(1)-obj.lower_bound);
+                1/(obj.higher_bound - x(2)) - 1/(x(2)-obj.lower_bound);
+                1/(obj.higher_bound - x(3)) - 1/(x(3)-obj.lower_bound);
+                1/(obj.higher_bound - x(4)) - 1/(x(4)-obj.lower_bound)];
+        end
+        
+        function ret = calc_log_barrier_hessian(obj, x)
+            H11 = 1/((obj.higher_bound + x(1))^2) + 1/((x(1)-obj.lower_bound)^2);
+            H22 = 1/((obj.higher_bound + x(2))^2) + 1/((x(2)-obj.lower_bound)^2);
+            H33 = 1/((obj.higher_bound + x(3))^2) + 1/((x(3)-obj.lower_bound)^2);
+            H44 = 1/((obj.higher_bound + x(4))^2) + 1/((x(4)-obj.lower_bound)^2);
+            ret = diag([H11, H22, H33, H44]);
         end
         
         function ret = calc_residual_vector(obj, m, J, x, f_motors, v, p, W, R)
@@ -161,42 +180,52 @@ classdef motor_estimator
             x_last = x;
             skip = 0;
             
-            while 1
-                %fprintf("iteration: %d\n", iteration)
-                
-                % Linearization
-                Jf = calc_f_jacobian(obj, batch.m, batch.J, batch.f_motors, batch.v, batch.p, batch.W, batch.R);
-                Jf_t = Jf.';
-                
-                % Skip Degenerate Jacobian due to insufficient excitement of the trajectory
-                rcond_JtJ = rcond(Jf.'*obj.Sigma_inv*Jf);
-                if rcond_JtJ < 1e-4
-                    fprintf('x: Degenerate Jacobian detected – skip this time step');
-                    x = x0;
-                    skip = 1;
-                    break;
+            lambda = 0.1;
+            mu = 10;
+            m = 8; % Constraints numbers  (i.e., lower_bound < x < higher_bound)
+            while (m / lambda) > 1e-6 % Outer loop for log barrier control
+                while 1 % Inner loop for minimization
+                    %fprintf("iteration: %d\n", iteration)
+                    
+                    % Linearization
+                    Jf = lambda * calc_f_jacobian(obj, batch.m, batch.J, batch.f_motors, batch.v, batch.p, batch.W, batch.R);
+                    Jf_t = Jf.';
+                    
+                    % Skip Degenerate Jacobian due to insufficient excitement of the trajectory
+                    rcond_JtJ = rcond(Jf.'*obj.Sigma_inv*Jf);
+                    if rcond_JtJ < 1e-4
+                        fprintf('x: Degenerate Jacobian detected – skip this time step');
+                        x = x0;
+                        ret_x = x;
+                        skip = 1;
+                        return;
+                    end
+                    
+                    % Calculate log barrier gradient and hessian
+                    g = calc_log_barrier_gradient(obj, x);
+                    H = calc_log_barrier_hessian(obj, x);
+                    
+                    % Calculate Gauss-Newton Step
+                    residual_f = lambda * calc_residual_vector(obj, batch.m, batch.J, x, batch.f_motors, batch.v, batch.p, batch.W, batch.R);
+                    delta_x = -(Jf_t*obj.Sigma_inv*Jf + H) \ (Jf_t*obj.Sigma_inv*residual_f + g);
+                    
+                    % Update x
+                    x_last = x;
+                    x = x + delta_x;
+                    
+                    %disp(norm(x - x_last));
+                    if norm(x - x_last) < 1e-6
+                        break;
+                    end
                 end
-                
-                % Calculate Gauss-Newton Step
-                residual_f = calc_residual_vector(obj, batch.m, batch.J, x, batch.f_motors, batch.v, batch.p, batch.W, batch.R);
-                delta_x = -(Jf_t*obj.Sigma_inv*Jf) \ (Jf_t*obj.Sigma_inv*residual_f);
-                
-                % Update x
-                x_last = x;
-                x = x + delta_x;
-                
-                %disp(norm(x - x_last));
-                if norm(x - x_last) < 1e-6
-                    break;
-                end
+                lambda = mu * lambda;
             end
-            
             ret_x = x;
         end
         
         function ret = run(obj, data)
             x_avg = [1; 1; 1; 1];
-            alpha = 0.05
+            alpha = 0.05;
             
             for i = 1:20000
                 x = [1; 1; 1; 1];
