@@ -2,7 +2,7 @@ classdef motor_estimator
     properties
         math;
         
-        n = 10; % Number of trajectory points (-1 for # of segments)
+        n = 50; % Number of trajectory points (-1 for # of segments)
         I = eye(3);
         g = 9.8;
         e3 = [0; 0; 1];
@@ -205,7 +205,21 @@ classdef motor_estimator
                     
                     % Calculate Gauss-Newton Step
                     residual_f = lambda * calc_residual_vector(obj, batch.m, batch.J, x, batch.f_motors, batch.v, batch.p, batch.W, batch.R);
-                    delta_x = -(Jf_t*obj.G*Jf + H) \ (Jf_t*obj.G*residual_f + g);
+                    
+                    % Solve linear system for optimal delta x
+                    A = Jf_t * obj.G * Jf + H;
+                    b = -(Jf_t * obj.G * residual_f + g);
+                    
+                    tic;
+                    % Solve linear system with Cholesky decomposition
+                    L = chol(A, 'lower');
+                    delta_x = L.' \ (L \ b);
+                    
+                    % Solve linear system without exploiting the structure
+                    %delta_x = A \ b;
+                    time = toc;
+                    
+                    %fprintf("time = %f seconds\n", time);
                     
                     % Update x
                     x_last = x;
