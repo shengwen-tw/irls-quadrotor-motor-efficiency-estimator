@@ -124,7 +124,7 @@ classdef motor_estimator
             
             for i=1:obj.n-1
                 delta_R = R(:,:,i).'*R(:,:,i+1);
-                r31 = R(3,3,i);
+                r31 = R(3,1,i);
                 r32 = R(3,2,i);
                 r33 = R(3,3,i);
                 
