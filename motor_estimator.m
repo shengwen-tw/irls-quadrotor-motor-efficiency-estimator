@@ -54,17 +54,17 @@ classdef motor_estimator
         
         function ret = calc_log_barrier_gradient(obj, x)
             ret = ...
-                [1/(obj.higher_bound - x(1)) - 1/(x(1)-obj.lower_bound);
-                1/(obj.higher_bound - x(2)) - 1/(x(2)-obj.lower_bound);
-                1/(obj.higher_bound - x(3)) - 1/(x(3)-obj.lower_bound);
-                1/(obj.higher_bound - x(4)) - 1/(x(4)-obj.lower_bound)];
+                [1/(obj.higher_bound-x(1)) - 1/(x(1)-obj.lower_bound);
+                1/(obj.higher_bound-x(2)) - 1/(x(2)-obj.lower_bound);
+                1/(obj.higher_bound-x(3)) - 1/(x(3)-obj.lower_bound);
+                1/(obj.higher_bound-x(4)) - 1/(x(4)-obj.lower_bound)];
         end
         
         function ret = calc_log_barrier_hessian(obj, x)
-            H11 = 1/((obj.higher_bound + x(1))^2) + 1/((x(1)-obj.lower_bound)^2);
-            H22 = 1/((obj.higher_bound + x(2))^2) + 1/((x(2)-obj.lower_bound)^2);
-            H33 = 1/((obj.higher_bound + x(3))^2) + 1/((x(3)-obj.lower_bound)^2);
-            H44 = 1/((obj.higher_bound + x(4))^2) + 1/((x(4)-obj.lower_bound)^2);
+            H11 = 1/((obj.higher_bound-x(1))^2) + 1/((x(1)-obj.lower_bound)^2);
+            H22 = 1/((obj.higher_bound-x(2))^2) + 1/((x(2)-obj.lower_bound)^2);
+            H33 = 1/((obj.higher_bound-x(3))^2) + 1/((x(3)-obj.lower_bound)^2);
+            H44 = 1/((obj.higher_bound-x(4))^2) + 1/((x(4)-obj.lower_bound)^2);
             ret = diag([H11, H22, H33, H44]);
         end
         
@@ -192,7 +192,7 @@ classdef motor_estimator
                     % Skip Degenerate Jacobian due to insufficient excitement of the trajectory
                     rcond_JtJ = rcond(Jf.'*obj.G*Jf);
                     if rcond_JtJ < 1e-4
-                        fprintf('x: Degenerate Jacobian detected – skip this time step');
+                        fprintf('x: Degenerate Jacobian detected – skip this time step\n');
                         x = x0;
                         ret_x = x;
                         skip = 1;
@@ -200,15 +200,15 @@ classdef motor_estimator
                     end
                     
                     % Calculate log barrier gradient and hessian
-                    g = calc_log_barrier_gradient(obj, x);
-                    H = calc_log_barrier_hessian(obj, x);
+                    G_log = calc_log_barrier_gradient(obj, x);
+                    H_log = calc_log_barrier_hessian(obj, x);
                     
                     % Calculate Gauss-Newton Step
                     residual_f = lambda * calc_residual_vector(obj, batch.m, batch.J, x, batch.f_motors, batch.v, batch.p, batch.W, batch.R);
                     
                     % Solve linear system for optimal delta x
-                    A = Jf_t * obj.G * Jf + H;
-                    b = -(Jf_t * obj.G * residual_f + g);
+                    A = Jf_t * obj.G * Jf + H_log;
+                    b = -(Jf_t * obj.G * residual_f + G_log);
                     
                     tic;
                     % Solve linear system with Cholesky decomposition
@@ -256,8 +256,8 @@ classdef motor_estimator
                 x_avg = alpha*x + (1-alpha)*x_avg;
                 x = x_avg;
                 
-                disp(x_avg);
-                %disp(x)
+                %disp(x_avg);
+                disp(x)
             end
             
             % Return estimated parameters
