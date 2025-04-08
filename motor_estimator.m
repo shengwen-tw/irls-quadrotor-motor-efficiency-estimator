@@ -2,7 +2,7 @@ classdef motor_estimator
     properties
         math;
         
-        n = 50; % Number of trajectory points (-1 for # of segments)
+        n = 30; % Number of trajectory points (-1 for # of segments)
         I = eye(3);
         g = 9.8;
         e3 = [0; 0; 1];
@@ -18,11 +18,11 @@ classdef motor_estimator
             0, 0, 0, 0, 0, 0, 1, 0, 0, 0;  % G_Wx
             0, 0, 0, 0, 0, 0, 0, 1, 0, 0;  % G_Wy
             0, 0, 0, 0, 0, 0, 0, 0, 1, 0;  % G_Wz
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 1]; % G_R
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 10]; % G_R
         G = [];
         
         lower_bound = 0;
-        higher_bound = 1.1;
+        higher_bound = 1.01;
     end
     
     methods
@@ -49,9 +49,9 @@ classdef motor_estimator
             batch.v = data.vel_arr(:, idx:idx+obj.n);
             batch.W = data.W_arr(:, idx:idx+obj.n);
             batch.R = data.R_arr(:, :, idx:idx+obj.n);
-            batch.f = data.ideal_f_arr(:, idx:idx+obj.n);
+            batch.f = data.f_arr(:, idx:idx+obj.n);
             batch.f_motors = data.f_motors_arr(:, idx:idx+obj.n);
-            batch.M = data.ideal_M_arr(:, idx:idx+obj.n);
+            batch.M = data.M_arr(:, idx:idx+obj.n);
             
             batch.m = data.m;
             batch.J = data.J;
@@ -161,14 +161,14 @@ classdef motor_estimator
                 r_start = 10*(i-1)+10;
                 r_end =   10*(i-1)+10;
                 r1 = -((delta_R(2,3)-delta_R(3,2))*f_motors(1)*d)/Jx ...
-                    + ((delta_R(3,1)-delta_R(1,3))*f_motors(1)*d)/Jy ...
-                    - ((delta_R(1,2)-delta_R(2,1))*f_motors(1)*c)/Jz;
+                    +((delta_R(3,1)-delta_R(1,3))*f_motors(1)*d)/Jy ...
+                    -((delta_R(1,2)-delta_R(2,1))*f_motors(1)*c)/Jz;
                 r2 = +((delta_R(2,3)-delta_R(3,2))*f_motors(2)*d)/Jx ...
-                    + ((delta_R(3,1)-delta_R(1,3))*f_motors(2)*d)/Jy ...
-                    + ((delta_R(1,2)-delta_R(2,1))*f_motors(2)*c)/Jz;
+                    +((delta_R(3,1)-delta_R(1,3))*f_motors(2)*d)/Jy ...
+                    +((delta_R(1,2)-delta_R(2,1))*f_motors(2)*c)/Jz;
                 r3 = +((delta_R(2,3)-delta_R(3,2))*f_motors(3)*d)/Jx ...
-                    - ((delta_R(3,1)-delta_R(1,3))*f_motors(3)*d)/Jy ...
-                    - ((delta_R(1,2)-delta_R(2,1))*f_motors(3)*c)/Jz;
+                    -((delta_R(3,1)-delta_R(1,3))*f_motors(3)*d)/Jy ...
+                    -((delta_R(1,2)-delta_R(2,1))*f_motors(3)*c)/Jz;
                 r4 = -((delta_R(2,3)-delta_R(3,2))*f_motors(4)*d)/Jx ...
                     - ((delta_R(3,1)-delta_R(1,3))*f_motors(4)*d)/Jy ...
                     + ((delta_R(1,2)-delta_R(2,1))*f_motors(4)*c)/Jz;
@@ -183,8 +183,8 @@ classdef motor_estimator
             x_last = x;
             skip = 0;
             
-            lambda = 0.1;
-            mu = 10;
+            lambda = 1e-4;
+            mu = 5;
             m = 8; % Constraints numbers  (i.e., lower_bound < x < higher_bound)
             while (m / lambda) > 1e-6 % Outer loop for log barrier control
                 while 1 % Inner loop for minimization
@@ -252,7 +252,7 @@ classdef motor_estimator
                 
                 fprintf("iteration: %d\n", i)
                 
-                batch = get_new_batch(obj, data, i, 1);
+                batch = get_new_batch(obj, data, i, 0);
                 
                 % Run optimization for current trajectory
                 [x, skip] = gauss_newton_x(obj, i, batch, x);
@@ -263,8 +263,8 @@ classdef motor_estimator
                 % Low-pass filter for x
                 x_avg = alpha*x + (1-alpha)*x_avg;
                 
-                %disp(x_avg)
-                disp(x)
+                disp(x_avg)
+                %disp(x)
             end
             
             % Return estimated parameters

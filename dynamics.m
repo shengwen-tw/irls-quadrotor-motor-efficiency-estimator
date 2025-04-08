@@ -1,13 +1,11 @@
 classdef dynamics
 	properties
-	dt;       %[sec]
-	mass = 1; %[kg]
+	dt;      %[sec]
+	mass;    %[kg]
 
 	g = 9.8; %gravitational acceleration
 	
-	J = [0.01466 0 0;  %inertia matrix of uav
-	     0 0.01466 0;
-		 0 0 0.02848];
+	J;       %inertia matrix of uav
 
 	x;       %initial position
 	v;       %initial velocity
