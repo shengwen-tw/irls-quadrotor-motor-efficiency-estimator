@@ -38,8 +38,13 @@ classdef motor_estimator
             ret = obj;
         end
         
-        function batch = get_new_batch_random(obj, data)
-            idx = randi([1, size(data.time_arr, 2) - obj.n]);
+        function batch = get_new_batch(obj, data, iteration, random)
+            if random == 1
+                idx = randi([1, size(data.time_arr, 2) - obj.n]);
+            else
+                idx = iteration;
+            end
+            
             batch.p = data.pos_arr(:, idx:idx+obj.n);
             batch.v = data.vel_arr(:, idx:idx+obj.n);
             batch.W = data.W_arr(:, idx:idx+obj.n);
@@ -210,6 +215,9 @@ classdef motor_estimator
                     A = Jf_t * obj.G * Jf + H_log;
                     b = -(Jf_t * obj.G * residual_f + G_log);
                     
+                    %residual_f' * residual_f
+                    %batch.W
+                    
                     tic;
                     % Solve linear system with Cholesky decomposition
                     L = chol(A, 'lower');
@@ -239,12 +247,12 @@ classdef motor_estimator
             x_avg = [1; 1; 1; 1];
             alpha = 0.05;
             
-            for i = 1:20000
+            for i = 1:20000-2000
                 x = [1; 1; 1; 1];
                 
                 fprintf("iteration: %d\n", i)
                 
-                batch = get_new_batch_random(obj, data);
+                batch = get_new_batch(obj, data, i, 1);
                 
                 % Run optimization for current trajectory
                 [x, skip] = gauss_newton_x(obj, i, batch, x);
@@ -254,9 +262,8 @@ classdef motor_estimator
                 
                 % Low-pass filter for x
                 x_avg = alpha*x + (1-alpha)*x_avg;
-                x = x_avg;
                 
-                %disp(x_avg);
+                %disp(x_avg)
                 disp(x)
             end
             
