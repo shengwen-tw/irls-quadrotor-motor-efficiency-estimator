@@ -6,38 +6,110 @@ data = load('sim_log.mat');
 data_size = size(data.time_arr, 2);
 fprintf('Data size = %d\n', data_size);
 
+true_efficiency = data.motor_efficiency_arr;
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Run motor efficiency estimation %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 dt = data.dt;
-g = data.g;
-m = data.m;
-J = data.J;
-e3 = [0; 0; 1];
-I_3x3 = eye(3, 3);
-
-x_pred = zeros(3, data_size);
-v_pred = zeros(3, data_size);
-W_pred = zeros(3, data_size);
-R_pred = zeros(3, 3, data_size);
-euler_pred = zeros(3, data_size);
-
-% Initialize the first step
-x_pred(:, 1) = data.pos_arr(:, 1);
-v_pred(:, 1) = data.vel_arr(:, 1);
-W_pred(:, 1) = data.W_arr(:, 1);
-R_pred(:, :, 1) = data.R_arr(:, :, 1);
-euler_pred(:, 1) = data.euler_arr(:, 1);
-
-%%%%%%%%%%%%%%%%%%%%%%
-% Run ADMM estimator %
-%%%%%%%%%%%%%%%%%%%%%%
-fprintf("Before estimation\n");
-fprintf("m = %f\n", data.m);
-fprintf("Jx = %f\n", data.J(1, 1));
-fprintf("Jy = %f\n", data.J(2, 2));
-fprintf("Jz = %f\n", data.J(3, 3));
-
+ITERATION_TIMES = data_size - estimator.n;
 estimator = estimator.init(math, dt);
-x_est = estimator.run(data);
+
+x_avg = [1; 1; 1; 1];
+alpha = 0.05;
+
+time_arr = zeros(1, ITERATION_TIMES);
+x_arr = zeros(4, ITERATION_TIMES);
+x_error_arr = zeros(4, ITERATION_TIMES);
+
+for i = 1:ITERATION_TIMES
+    x = [1; 1; 1; 1];
+    fprintf("iteration: %d\n", i)
+    
+    batch =  get_new_batch(data, i, estimator.n, 0);
+    
+    % Run motor efficiency estimator
+    [x, skip] = estimator.run(i, batch, x);
+    if skip == 1
+        continue;
+    end
+    
+    % Low-pass filter for x
+    x_avg = alpha*x + (1-alpha)*x_avg;
+    
+    disp(x_avg)
+    %disp(x)
+    
+    % Record
+    time_arr(i) = i * dt;
+    x_arr(:, i) = x;
+    x_error_arr(:, i) = true_efficiency(:, i) - x;
+end
+
+% RMSE
+rmse = sqrt(mean(x_error_arr.^2, 2));
+fprintf("RMSE = (%f, %f, %f, %f)\n", rmse(1), rmse(2), rmse(3), rmse(4));
+
+% Estimation result
+figure('Name', 'Motor efficiency');
+subplot (4, 1, 1);
+plot(time_arr, x_arr(1, :));
+title('motor efficiency');
+xlabel('time [s]');
+ylabel('\eta_1');
+subplot (4, 1, 2);
+plot(time_arr, x_arr(2, :));
+xlabel('time [s]');
+ylabel('\eta_2');
+subplot (4, 1, 3);
+plot(time_arr, x_arr(3, :));
+xlabel('time [s]');
+ylabel('\eta_3');
+subplot (4, 1, 4);
+plot(time_arr, x_arr(4, :));
+xlabel('time [s]');
+ylabel('\eta_4');
+
+% Error
+figure('Name', 'Error of motor efficiency');
+subplot (4, 1, 1);
+plot(time_arr, x_error_arr(1, :));
+title('motor efficiency');
+xlabel('time [s]');
+ylabel('\eta_1 error');
+subplot (4, 1, 2);
+plot(time_arr, x_error_arr(2, :));
+xlabel('time [s]');
+ylabel('\eta_2 error');
+subplot (4, 1, 3);
+plot(time_arr, x_error_arr(3, :));
+xlabel('time [s]');
+ylabel('\eta_3 error');
+subplot (4, 1, 4);
+plot(time_arr, x_error_arr(4, :));
+xlabel('time [s]');
+ylabel('\eta_4 error');
 
 disp("Press any key to leave");
 pause;
 close all;
+
+function batch = get_new_batch(data, iteration, len, random)
+if random == 1
+    idx = randi([1, size(data.time_arr, 2) - obj.n]);
+else
+    idx = iteration;
+end
+
+batch.p = data.pos_arr(:, idx:idx+len);
+batch.v = data.vel_arr(:, idx:idx+len);
+batch.W = data.W_arr(:, idx:idx+len);
+batch.R = data.R_arr(:, :, idx:idx+len);
+batch.f = data.f_arr(:, idx:idx+len);
+batch.f_motors = data.f_motors_arr(:, idx:idx+len);
+batch.M = data.M_arr(:, idx:idx+len);
+batch.m = data.m;
+batch.J = data.J;
+batch.c = data.c;
+batch.d = data.d;
+end

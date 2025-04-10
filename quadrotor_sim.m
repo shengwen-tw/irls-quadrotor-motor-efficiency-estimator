@@ -16,6 +16,18 @@ function quadrotor_sim
 	uav_dynamics.J = [0.01466 0 0;  %inertia matrix of uav
 	                  0 0.01466 0;
 		              0 0 0.02848];
+    d = 0.225;    %[m], distance of quadrotor's center to motor location
+    c = 0.009012; %[N*m/(rad/s)^2]
+    motor_efficiency = [0.9; 0.8; 0.5; 0.7];
+    
+    A = [1, 1, 1, 1;
+        -d, d, d, -d;
+        d, d, -d, -d;
+        -c, c, -c, c];
+    A_inv = [1, -1/d, 1/d, -1/c;
+        1, 1/d, 1/d, 1/c;
+        1, 1/d, -1/d, -1/c;
+        1, -1/d, -1/d, 1/c] / 4;
     
 	%set initial attitude (DCM)
 	init_attitude(1) = deg2rad(0); %roll
@@ -86,6 +98,41 @@ function quadrotor_sim
 	eW_arr = zeros(3, ITERATION_TIMES);
 	ex_arr = zeros(3, ITERATION_TIMES);
 	ev_arr = zeros(3, ITERATION_TIMES);
+    motor_efficiency_arr = zeros(4, ITERATION_TIMES);
+    
+    V_start = 12.0;
+    V_end = 10.7;
+    voltage = linspace(V_start, V_end, ITERATION_TIMES);
+    
+    eta_0 = 1.0;
+    alpha = 0.25;
+    V0 = V_start;
+    
+    eta_voltage_based = eta_0 * exp(alpha * (voltage - V0));
+    
+    % Voltage drop decay
+    for i = 1:4
+        motor_efficiency_arr(i, :) = eta_voltage_based;
+    end
+    
+    % Clipping
+    %for i = 1:ITERATION_TIMES
+    %    motor_efficiency_arr(1, i) = 1;
+    %    motor_efficiency_arr(2, i) = 1;
+    %    motor_efficiency_arr(3, i) = 1;
+    %    motor_efficiency_arr(4, i) = 1;
+    %end
+    %for i = (ITERATION_TIMES/2):ITERATION_TIMES
+    %    motor_efficiency_arr(3, i) = 0.5;
+    %end
+    
+    % Constant
+    %for i = 1: ITERATION_TIMES
+    %    motor_efficiency_arr(1, i) = 0.9;
+    %    motor_efficiency_arr(2, i) = 0.8;
+    %    motor_efficiency_arr(3, i) = 0.5;
+    %    motor_efficiency_arr(4, i) = 0.7;
+    %end
     
 	for i = 1: ITERATION_TIMES
 		%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -153,27 +200,13 @@ function quadrotor_sim
         ideal_M = uav_ctrl_M;
         
         % Thrust allocation
-        d = 0.225;    %[m], distance of quadrotor's center to motor location
-        c = 0.009012; %[N*m/(rad/s)^2]
-        A = [1, 1, 1, 1;
-             -d, d, d, -d;
-             d, d, -d, -d;
-             -c, c, -c, c];
-        A_inv = [1, -1/d, 1/d, -1/c;
-                 1, 1/d, 1/d, 1/c;
-                 1, 1/d, -1/d, -1/c;
-                 1, -1/d, -1/d, 1/c] / 4;
         f_motors_ideal = A_inv * [f_total; uav_ctrl_M(1); uav_ctrl_M(2); uav_ctrl_M(3)];
         
-        % Motor efficiency
-        eta1 = 0.9; % motor1
-        eta2 = 0.8; % motor2
-        eta3 = 0.5; % motor3
-        eta4 = 0.7; % motor4
-        f_motors = [eta1 * f_motors_ideal(1);
-                    eta2 * f_motors_ideal(2);
-                    eta3 * f_motors_ideal(3);
-                    eta4 * f_motors_ideal(4)];
+        % Assign motor efficiency
+        f_motors = [motor_efficiency_arr(1, i) * f_motors_ideal(1);
+                    motor_efficiency_arr(2, i) * f_motors_ideal(2);
+                    motor_efficiency_arr(3, i) * f_motors_ideal(3);
+                    motor_efficiency_arr(4, i) * f_motors_ideal(4)];
 
         % Add noise to motors
         noise_level = 0.2;
@@ -220,7 +253,8 @@ function quadrotor_sim
 	J = uav_dynamics.J;
 	save('sim_log.mat', 'dt', 'g', 'm', 'J', 'time_arr', ...
          'pos_arr', 'vel_arr', 'W_arr', 'R_arr', 'euler_arr', ...
-         'f_arr', 'M_arr', 'f_motors_arr');
+         'f_arr', 'M_arr', 'f_motors_arr', 'c', 'd', ...
+         'motor_efficiency_arr');
     
 	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 	% Animate the simulation result %
@@ -385,6 +419,30 @@ function quadrotor_sim
     plot(time_arr, f_arr(:));
 	xlabel('time [s]');
 	ylabel('f');
+
+	% Motor efficiency
+	figure('Name', 'Motor efficiency');
+	subplot (4, 1, 1);
+	plot(time_arr, motor_efficiency_arr(1, :), 'LineWidth', 2);
+	title('Motor efficiency');
+	xlabel('time [s]');
+	ylabel('\eta_1');
+    ylim([-0.1 1.1]);
+	subplot (4, 1, 2);
+	plot(time_arr, motor_efficiency_arr(2, :), 'LineWidth', 2);
+	xlabel('time [s]');
+	ylabel('\eta_2');
+    ylim([-0.1 1.1]);
+	subplot (4, 1, 3);
+	plot(time_arr, motor_efficiency_arr(3, :), 'LineWidth', 2);
+	xlabel('time [s]');
+	ylabel('\eta_3');
+    ylim([-0.1 1.1]);
+	subplot (4, 1, 4);
+	plot(time_arr, motor_efficiency_arr(4, :), 'LineWidth', 2);
+	xlabel('time [s]');
+	ylabel('\eta_4');
+    ylim([-0.1 1.1]);
     
 	disp("Press any key to leave");
 	pause;

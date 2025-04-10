@@ -2,7 +2,7 @@ classdef motor_estimator
     properties
         math;
         
-        n = 30; % Number of trajectory points (-1 for # of segments)
+        n = 10; % Number of trajectory points (-1 for # of segments)
         I = eye(3);
         g = 9.8;
         e3 = [0; 0; 1];
@@ -52,9 +52,10 @@ classdef motor_estimator
             batch.f = data.f_arr(:, idx:idx+obj.n);
             batch.f_motors = data.f_motors_arr(:, idx:idx+obj.n);
             batch.M = data.M_arr(:, idx:idx+obj.n);
-            
             batch.m = data.m;
             batch.J = data.J;
+            batch.c = data.c;
+            batch.d = data.d;
         end
         
         function ret = calc_log_barrier_gradient(obj, x)
@@ -114,7 +115,7 @@ classdef motor_estimator
             ret = residual / sqrt(obj.n - 1);
         end
         
-        function ret = calc_f_jacobian(obj, m, J, f_motors, v, p, W, R)
+        function ret = calc_f_jacobian(obj, m, J, c, d, f_motors, v, p, W, R)
             X_DIM = 4; % [eta1; eta2; eta3; et4]
             RES_DIM = 10; % [res_v, res_p, res_W, res_R]
             Jf = zeros(RES_DIM*(obj.n - 1), X_DIM);
@@ -122,10 +123,6 @@ classdef motor_estimator
             Jx = J(1,1);
             Jy = J(2,2);
             Jz = J(3,3);
-            
-            % FIXME
-            d = 0.225;
-            c = 0.009012;
             
             for i=1:obj.n-1
                 delta_R = R(:,:,i).'*R(:,:,i+1);
@@ -178,7 +175,7 @@ classdef motor_estimator
             ret = Jf;
         end
         
-        function [ret_x, skip] = gauss_newton_x(obj, iteration, batch, x)
+        function [ret_x, skip] = run(obj, iteration, batch, x)
             x0 = x;
             x_last = x;
             skip = 0;
@@ -191,7 +188,8 @@ classdef motor_estimator
                     %fprintf("iteration: %d\n", iteration)
                     
                     % Linearization
-                    Jf = lambda * calc_f_jacobian(obj, batch.m, batch.J, batch.f_motors, batch.v, batch.p, batch.W, batch.R);
+                    Jf = lambda * calc_f_jacobian(obj, batch.m, batch.J, batch.c, batch.d, ...
+                        batch.f_motors, batch.v, batch.p, batch.W, batch.R);
                     Jf_t = Jf.';
                     
                     % Skip Degenerate Jacobian due to insufficient excitement of the trajectory
@@ -240,35 +238,17 @@ classdef motor_estimator
                 end
                 lambda = mu * lambda;
             end
-            ret_x = x;
-        end
-        
-        function ret = run(obj, data)
-            x_avg = [1; 1; 1; 1];
-            alpha = 0.05;
             
-            for i = 1:20000-2000
-                x = [1; 1; 1; 1];
-                
-                fprintf("iteration: %d\n", i)
-                
-                batch = get_new_batch(obj, data, i, 0);
-                
-                % Run optimization for current trajectory
-                [x, skip] = gauss_newton_x(obj, i, batch, x);
-                if skip == 1
-                    continue;
+            % Rang clipping
+            for i = 1:4
+                if x(i) > obj.higher_bound
+                    x(i) = obj.higher_bound;
+                elseif x(i) < obj.lower_bound
+                    x(i) = obj.lower_bound;
                 end
-                
-                % Low-pass filter for x
-                x_avg = alpha*x + (1-alpha)*x_avg;
-                
-                disp(x_avg)
-                %disp(x)
             end
             
-            % Return estimated parameters
-            ret = x;
+            ret_x = x;
         end
     end
 end
