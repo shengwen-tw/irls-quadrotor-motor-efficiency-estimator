@@ -176,11 +176,15 @@ classdef motor_estimator
         end
         
         function [ret_x, skip] = run(obj, iteration, batch, x)
+            x_arr = [];
+            iteration_arr = [];
+            iteration = 0;
+            
             x0 = x;
             x_last = x;
             skip = 0;
             
-            lambda = 1e-4;
+            lambda = 1e-3;
             mu = 5;
             m = 8; % Constraints numbers  (i.e., lower_bound < x < higher_bound)
             while (m / lambda) > 1e-6 % Outer loop for log barrier control
@@ -231,12 +235,40 @@ classdef motor_estimator
                     x_last = x;
                     x = x + delta_x;
                     
+                    % Profiling
+                    x_arr(:, end+1) = x;
+                    iteration = iteration + 1;
+                    iteration_arr(end+1) = iteration;
+                    
                     %disp(norm(x - x_last));
                     if norm(x - x_last) < 1e-6
                         break;
                     end
                 end
                 lambda = mu * lambda;
+            end
+            
+            % Profiling
+            if 0
+                figure('Name', 'Motor efficiency');
+                subplot (4, 1, 1);
+                plot(iteration_arr, x_arr(1, :));
+                title('motor efficiency');
+                xlabel('time [s]');
+                ylabel('\eta_1');
+                subplot (4, 1, 2);
+                plot(iteration_arr, x_arr(2, :));
+                xlabel('time [s]');
+                ylabel('\eta_2');
+                subplot (4, 1, 3);
+                plot(iteration_arr, x_arr(3, :));
+                xlabel('time [s]');
+                ylabel('\eta_3');
+                subplot (4, 1, 4);
+                plot(iteration_arr, x_arr(4, :));
+                xlabel('time [s]');
+                ylabel('\eta_4');
+                pause;
             end
             
             % Rang clipping
