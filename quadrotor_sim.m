@@ -115,15 +115,18 @@ function quadrotor_sim
         motor_efficiency_arr(i, :) = eta_voltage_based;
     end
     
-    % Clipping
-    %for i = 1:ITERATION_TIMES
-    %    motor_efficiency_arr(1, i) = 1;
-    %    motor_efficiency_arr(2, i) = 1;
-    %    motor_efficiency_arr(3, i) = 1;
-    %    motor_efficiency_arr(4, i) = 1;
+    %motor_efficiency_arr = ones(4, ITERATION_TIMES);
+    %for i = (ITERATION_TIMES/4)*0+1:(ITERATION_TIMES/4)*1
+    %    motor_efficiency_arr(1, i) = 0.5;
     %end
-    %for i = (ITERATION_TIMES/2):ITERATION_TIMES
+    %for i = (ITERATION_TIMES/4)*1+1:(ITERATION_TIMES/4)*2
+    %    motor_efficiency_arr(2, i) = 0.5;
+    %end
+    %for i = (ITERATION_TIMES/4)*2+1:(ITERATION_TIMES/4)*3
     %    motor_efficiency_arr(3, i) = 0.5;
+    %end    
+    %for i = (ITERATION_TIMES/4)*3+1:(ITERATION_TIMES/4)*4
+    %    motor_efficiency_arr(4, i) = 0.5;
     %end
     
     % Constant
@@ -427,22 +430,22 @@ function quadrotor_sim
 	title('Motor efficiency');
 	xlabel('time [s]');
 	ylabel('\eta_1');
-    ylim([-0.1 1.1]);
+    ylim([0.2 1.2]);
 	subplot (4, 1, 2);
 	plot(time_arr, motor_efficiency_arr(2, :), 'LineWidth', 2);
 	xlabel('time [s]');
 	ylabel('\eta_2');
-    ylim([-0.1 1.1]);
+    ylim([0.2 1.2]);
 	subplot (4, 1, 3);
 	plot(time_arr, motor_efficiency_arr(3, :), 'LineWidth', 2);
 	xlabel('time [s]');
 	ylabel('\eta_3');
-    ylim([-0.1 1.1]);
+    ylim([0.2 1.2]);
 	subplot (4, 1, 4);
 	plot(time_arr, motor_efficiency_arr(4, :), 'LineWidth', 2);
 	xlabel('time [s]');
 	ylabel('\eta_4');
-    ylim([-0.1 1.1]);
+    ylim([0.2 1.2]);
     
 	disp("Press any key to leave");
 	pause;
