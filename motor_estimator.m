@@ -21,8 +21,9 @@ classdef motor_estimator
             0, 0, 0, 0, 0, 0, 0, 0, 0, 10]; % G_R
         G = [];
         
-        lower_bound = -0.01;
-        higher_bound = 1.01;
+        lower_bound = 0;
+        higher_bound = 1;
+        eps_bound = 0.01
     end
     
     methods
@@ -59,18 +60,22 @@ classdef motor_estimator
         end
         
         function ret = calc_log_barrier_gradient(obj, x)
+            hb = obj.higher_bound + obj.eps_bound;
+            lb = obj.lower_bound - obj.eps_bound;
             ret = ...
-                [1/(obj.higher_bound-x(1)) - 1/(x(1)-obj.lower_bound);
-                1/(obj.higher_bound-x(2)) - 1/(x(2)-obj.lower_bound);
-                1/(obj.higher_bound-x(3)) - 1/(x(3)-obj.lower_bound);
-                1/(obj.higher_bound-x(4)) - 1/(x(4)-obj.lower_bound)];
+                [1/(hb-x(1)) - 1/(x(1)-lb); ...
+                1/(hb-x(2)) - 1/(x(2)-lb); ...
+                1/(hb-x(3)) - 1/(x(3)-lb); ...
+                1/(hb-x(4)) - 1/(x(4)-lb)];
         end
         
         function ret = calc_log_barrier_hessian(obj, x)
-            H11 = 1/((obj.higher_bound-x(1))^2) + 1/((x(1)-obj.lower_bound)^2);
-            H22 = 1/((obj.higher_bound-x(2))^2) + 1/((x(2)-obj.lower_bound)^2);
-            H33 = 1/((obj.higher_bound-x(3))^2) + 1/((x(3)-obj.lower_bound)^2);
-            H44 = 1/((obj.higher_bound-x(4))^2) + 1/((x(4)-obj.lower_bound)^2);
+            hb = obj.higher_bound + obj.eps_bound;
+            lb = obj.lower_bound - obj.eps_bound;
+            H11 = 1/((hb-x(1))^2) + 1/((x(1)-lb)^2);
+            H22 = 1/((hb-x(2))^2) + 1/((x(2)-lb)^2);
+            H33 = 1/((hb-x(3))^2) + 1/((x(3)-lb)^2);
+            H44 = 1/((hb-x(4))^2) + 1/((x(4)-lb)^2);
             ret = diag([H11, H22, H33, H44]);
         end
         
@@ -222,11 +227,11 @@ classdef motor_estimator
                     
                     tic;
                     % Solve linear system with Cholesky decomposition
-                    L = chol(A, 'lower');
-                    delta_x = L.' \ (L \ b);
+                    %L = chol(A, 'lower');
+                    %delta_x = L.' \ (L \ b);
                     
                     % Solve linear system without exploiting the structure
-                    %delta_x = A \ b;
+                    delta_x = A \ b;
                     time = toc;
                     
                     %fprintf("time = %f seconds\n", time);
@@ -245,6 +250,16 @@ classdef motor_estimator
                         break;
                     end
                 end
+                
+                % Projection step
+                for i = 1:4
+                    if x(i) > obj.higher_bound
+                        x(i) = obj.higher_bound;
+                    elseif x(i) < obj.lower_bound
+                        x(i) = obj.lower_bound;
+                    end
+                end
+                
                 lambda = mu * lambda;
             end
             
@@ -269,15 +284,6 @@ classdef motor_estimator
                 xlabel('time [s]');
                 ylabel('\eta_4');
                 pause;
-            end
-            
-            % Rang clipping
-            for i = 1:4
-                if x(i) > obj.higher_bound
-                    x(i) = obj.higher_bound;
-                elseif x(i) < obj.lower_bound
-                    x(i) = obj.lower_bound;
-                end
             end
             
             ret_x = x;
