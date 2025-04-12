@@ -12,7 +12,7 @@ true_efficiency = data.motor_efficiency_arr;
 % Run motor efficiency estimation %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 dt = data.dt;
-ITERATION_TIMES = data_size - estimator.n;
+ITERATION_TIMES = data_size - estimator.n + 1;
 estimator = estimator.init(math, dt);
 
 x_avg = [1; 1; 1; 1];
@@ -30,15 +30,15 @@ for i = 1:ITERATION_TIMES
     
     % Run motor efficiency estimator
     [x, skip] = estimator.run(i, batch, x);
-    if skip == 1
-        continue;
-    end
+    %if skip == 1
+    %    continue;
+    %end
     
     % Low-pass filter for x
     x_avg = alpha*x + (1-alpha)*x_avg;
     
-    disp(x_avg)
-    %disp(x)
+    %disp(x_avg)
+    disp(x)
     
     % Record
     time_arr(i) = i * dt;
@@ -112,18 +112,19 @@ close all;
 
 function batch = get_new_batch(data, iteration, len, random)
 if random == 1
-    idx = randi([1, size(data.time_arr, 2) - obj.n]);
+    idx = randi([1, ITERATION_TIMES]);
 else
     idx = iteration;
 end
 
-batch.p = data.pos_arr(:, idx:idx+len);
-batch.v = data.vel_arr(:, idx:idx+len);
-batch.W = data.W_arr(:, idx:idx+len);
-batch.R = data.R_arr(:, :, idx:idx+len);
-batch.f = data.f_arr(:, idx:idx+len);
-batch.f_motors = data.f_motors_arr(:, idx:idx+len);
-batch.M = data.M_arr(:, idx:idx+len);
+idx_end = idx+len-1;
+batch.p = data.pos_arr(:, idx:idx_end);
+batch.v = data.vel_arr(:, idx:idx_end);
+batch.W = data.W_arr(:, idx:idx_end);
+batch.R = data.R_arr(:, :, idx:idx_end);
+batch.f = data.f_arr(:, idx:idx_end);
+batch.f_motors = data.f_motors_arr(:, idx_end);
+batch.M = data.M_arr(:, idx:idx_end);
 batch.m = data.m;
 batch.J = data.J;
 batch.c = data.c;

@@ -222,16 +222,13 @@ classdef motor_estimator
                     A = Jf_t * obj.G * Jf + H_log;
                     b = -(Jf_t * obj.G * residual_f + G_log);
                     
-                    %residual_f' * residual_f
-                    %batch.W
-                    
                     tic;
                     % Solve linear system with Cholesky decomposition
-                    %L = chol(A, 'lower');
-                    %delta_x = L.' \ (L \ b);
+                    L = chol(A, 'lower');
+                    delta_x = L.' \ (L \ b);
                     
                     % Solve linear system without exploiting the structure
-                    delta_x = A \ b;
+                    %delta_x = A \ b;
                     time = toc;
                     
                     %fprintf("time = %f seconds\n", time);
