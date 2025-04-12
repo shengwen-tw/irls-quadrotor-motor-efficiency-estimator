@@ -21,7 +21,7 @@ classdef motor_estimator
             0, 0, 0, 0, 0, 0, 0, 0, 0, 10]; % G_R
         G = [];
         
-        lower_bound = 0;
+        lower_bound = -0.01;
         higher_bound = 1.01;
     end
     
@@ -184,7 +184,7 @@ classdef motor_estimator
             x_last = x;
             skip = 0;
             
-            lambda = 1e-3;
+            lambda = 1e-5;
             mu = 5;
             m = 8; % Constraints numbers  (i.e., lower_bound < x < higher_bound)
             while (m / lambda) > 1e-6 % Outer loop for log barrier control
