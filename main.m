@@ -29,10 +29,7 @@ for i = 1:ITERATION_TIMES
     batch =  get_new_batch(data, i, estimator.n, 0);
     
     % Run motor efficiency estimator
-    [x, skip] = estimator.run(i, batch, x);
-    %if skip == 1
-    %    continue;
-    %end
+    x = estimator.run(i, batch, x);
     
     % Low-pass filter for x
     x_avg = alpha*x + (1-alpha)*x_avg;

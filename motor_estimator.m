@@ -21,9 +21,19 @@ classdef motor_estimator
             0, 0, 0, 0, 0, 0, 0, 0, 0, 10]; % G_R
         G = [];
         
+        Dphi = [1, 0, 0, 0; ...
+            0, 1, 0, 0; ...
+            0, 0, 1, 0; ...
+            0, 0, 0, 1; ...
+            -1, 0, 0, 0; ...
+            0, -1, 0, 0; ...
+            0, 0, -1, 0; ...
+            0, 0, 0, -1];
+        Dphi_t;
+        
         lower_bound = 0;
-        higher_bound = 1;
-        eps_bound = 0.01
+        upper_bound = 1;
+        bound_safe_eps = 1e-3;
     end
     
     methods
@@ -36,32 +46,14 @@ classdef motor_estimator
                 obj.G = blkdiag(obj.G, obj.G_i);
             end
             
+            obj.Dphi_t = obj.Dphi.';
+            
             ret = obj;
         end
         
-        function batch = get_new_batch(obj, data, iteration, random)
-            if random == 1
-                idx = randi([1, size(data.time_arr, 2) - obj.n]);
-            else
-                idx = iteration;
-            end
-            
-            batch.p = data.pos_arr(:, idx:idx+obj.n);
-            batch.v = data.vel_arr(:, idx:idx+obj.n);
-            batch.W = data.W_arr(:, idx:idx+obj.n);
-            batch.R = data.R_arr(:, :, idx:idx+obj.n);
-            batch.f = data.f_arr(:, idx:idx+obj.n);
-            batch.f_motors = data.f_motors_arr(:, idx:idx+obj.n);
-            batch.M = data.M_arr(:, idx:idx+obj.n);
-            batch.m = data.m;
-            batch.J = data.J;
-            batch.c = data.c;
-            batch.d = data.d;
-        end
-        
         function ret = calc_log_barrier_gradient(obj, x)
-            hb = obj.higher_bound + obj.eps_bound;
-            lb = obj.lower_bound - obj.eps_bound;
+            hb = obj.upper_bound + obj.bound_safe_eps;
+            lb = obj.lower_bound - obj.bound_safe_eps;
             ret = ...
                 [1/(hb-x(1)) - 1/(x(1)-lb); ...
                 1/(hb-x(2)) - 1/(x(2)-lb); ...
@@ -70,8 +62,8 @@ classdef motor_estimator
         end
         
         function ret = calc_log_barrier_hessian(obj, x)
-            hb = obj.higher_bound + obj.eps_bound;
-            lb = obj.lower_bound - obj.eps_bound;
+            hb = obj.upper_bound + obj.bound_safe_eps;
+            lb = obj.lower_bound - obj.bound_safe_eps;
             H11 = 1/((hb-x(1))^2) + 1/((x(1)-lb)^2);
             H22 = 1/((hb-x(2))^2) + 1/((x(2)-lb)^2);
             H33 = 1/((hb-x(3))^2) + 1/((x(3)-lb)^2);
@@ -79,7 +71,7 @@ classdef motor_estimator
             ret = diag([H11, H22, H33, H44]);
         end
         
-        function ret = calc_residual_vector(obj, m, J, x, f_motors, v, p, W, R)
+        function ret = calc_trajectory_residual_vector(obj, m, J, x, f_motors, v, p, W, R)
             J_inv = inv(J);
             residual = zeros(10 * (obj.n - 1), 1);
             
@@ -120,7 +112,34 @@ classdef motor_estimator
             ret = residual / sqrt(obj.n - 1);
         end
         
-        function ret = calc_f_jacobian(obj, m, J, c, d, f_motors, v, p, W, R)
+        function phi = calc_phi_vector(obj, x)
+            lb = obj.lower_bound - obj.bound_safe_eps;
+            hb = obj.upper_bound + obj.bound_safe_eps;
+            phi = [x(1) - hb; ...
+                x(2) - hb; ...
+                x(3) - hb; ...
+                x(4) - hb; ...
+                lb - x(1); ...
+                lb - x(2); ...
+                lb - x(3); ...
+                lb - x(4)];
+        end
+        
+        function [r_dual, r_cent] = calc_primal_dual_residual_vector(obj, phi, Jt, f_residual, lambda, t)
+            r_dual = Jt*obj.G*f_residual + obj.Dphi_t*lambda;
+            r_cent = -diag(lambda)*phi - (1/t)*ones(8, 1);
+        end
+        
+        function KKT = calc_primal_dual_kkt_matrix(obj, phi, J, Jt, lambda)
+            KKT = [Jt*obj.G*J, obj.Dphi_t; ...
+                -diag(lambda)*obj.Dphi, -diag(phi)];
+        end
+        
+        function gap = calc_duality_gap(obj, phi, lambda)
+            gap = -phi.' * lambda;
+        end
+        
+        function ret = calc_trajectory_jacobian(obj, m, J, c, d, f_motors, v, p, W, R)
             X_DIM = 4; % [eta1; eta2; eta3; et4]
             RES_DIM = 10; % [res_v, res_p, res_W, res_R]
             Jf = zeros(RES_DIM*(obj.n - 1), X_DIM);
@@ -180,24 +199,24 @@ classdef motor_estimator
             ret = Jf;
         end
         
-        function [ret_x, skip] = run(obj, iteration, batch, x)
+        function ret_x = run_primal(obj, iteration, batch, x)
             x_arr = [];
             iteration_arr = [];
+            residual_arr = [];
             iteration = 0;
             
             x0 = x;
             x_last = x;
-            skip = 0;
             
             lambda = 1e-5;
             mu = 5;
-            m = 8; % Constraints numbers  (i.e., lower_bound < x < higher_bound)
+            m = 8; % Constraints numbers  (i.e., lower_bound < x < upper_bound)
             while (m / lambda) > 1e-6 % Outer loop for log barrier control
                 while 1 % Inner loop for minimization
                     %fprintf("iteration: %d\n", iteration)
                     
                     % Linearization
-                    Jf = lambda * calc_f_jacobian(obj, batch.m, batch.J, batch.c, batch.d, ...
+                    Jf = lambda * calc_trajectory_jacobian(obj, batch.m, batch.J, batch.c, batch.d, ...
                         batch.f_motors, batch.v, batch.p, batch.W, batch.R);
                     Jf_t = Jf.';
                     
@@ -207,7 +226,6 @@ classdef motor_estimator
                         fprintf('x: Degenerate Jacobian detected – skip this time step\n');
                         x = x0;
                         ret_x = x;
-                        skip = 1;
                         return;
                     end
                     
@@ -216,11 +234,11 @@ classdef motor_estimator
                     H_log = calc_log_barrier_hessian(obj, x);
                     
                     % Calculate Gauss-Newton Step
-                    residual_f = lambda * calc_residual_vector(obj, batch.m, batch.J, x, batch.f_motors, batch.v, batch.p, batch.W, batch.R);
+                    f_residual = lambda * calc_trajectory_residual_vector(obj, batch.m, batch.J, x, batch.f_motors, batch.v, batch.p, batch.W, batch.R);
                     
                     % Solve linear system for optimal delta x
                     A = Jf_t * obj.G * Jf + H_log;
-                    b = -(Jf_t * obj.G * residual_f + G_log);
+                    b = -(Jf_t * obj.G * f_residual + G_log);
                     
                     tic;
                     % Solve linear system with Cholesky decomposition
@@ -242,6 +260,9 @@ classdef motor_estimator
                     iteration = iteration + 1;
                     iteration_arr(end+1) = iteration;
                     
+                    f_residual = lambda * calc_trajectory_residual_vector(obj, batch.m, batch.J, x, batch.f_motors, batch.v, batch.p, batch.W, batch.R);
+                    residual_arr(end+1) = sqrt(f_residual.' * obj.G * f_residual);
+                    
                     %disp(norm(x - x_last));
                     if norm(x - x_last) < 1e-6
                         break;
@@ -250,8 +271,8 @@ classdef motor_estimator
                 
                 % Projection step
                 for i = 1:4
-                    if x(i) > obj.higher_bound
-                        x(i) = obj.higher_bound;
+                    if x(i) > obj.upper_bound
+                        x(i) = obj.upper_bound;
                     elseif x(i) < obj.lower_bound
                         x(i) = obj.lower_bound;
                     end
@@ -262,28 +283,204 @@ classdef motor_estimator
             
             % Profiling
             if 0
-                figure('Name', 'Motor efficiency');
+                figure('Name', 'Efficiency vs Iteration');
                 subplot (4, 1, 1);
-                plot(iteration_arr, x_arr(1, :));
-                title('motor efficiency');
-                xlabel('time [s]');
+                plot(iteration_arr, x_arr(1, :), 'LineWidth', 1.7);
+                xlabel('Iteration number');
                 ylabel('\eta_1');
+                xlim([0, iteration]);
+                ylim([0.2 1.2]);
                 subplot (4, 1, 2);
-                plot(iteration_arr, x_arr(2, :));
-                xlabel('time [s]');
+                plot(iteration_arr, x_arr(2, :), 'LineWidth', 1.7);
+                xlabel('Iteration number');
                 ylabel('\eta_2');
+                xlim([0, iteration]);
+                ylim([0.2 1.2]);
                 subplot (4, 1, 3);
-                plot(iteration_arr, x_arr(3, :));
-                xlabel('time [s]');
+                plot(iteration_arr, x_arr(3, :), 'LineWidth', 1.7);
+                xlabel('Iteration number');
                 ylabel('\eta_3');
+                xlim([0, iteration]);
+                ylim([0.2 1.2]);
                 subplot (4, 1, 4);
-                plot(iteration_arr, x_arr(4, :));
-                xlabel('time [s]');
+                plot(iteration_arr, x_arr(4, :), 'LineWidth', 1.7);
+                xlabel('Iteration number');
+                xlim([0, iteration]);
+                ylim([0.2 1.2]);
                 ylabel('\eta_4');
+                
+                figure('Name', 'Residual vs Iteration');
+                plot(iteration_arr, residual_arr(:), 'LineWidth', 1.7);
+                xlabel('Iteration number');
+                ylabel('r');
+                xlim([0, iteration]);
+                set(gca, 'YScale', 'log')
+                
                 pause;
+                close all;
             end
             
             ret_x = x;
+        end
+        
+        function ret_x = run_primal_dual(obj, iteration, batch, x)
+            x_arr = [];
+            iteration_arr = [];
+            residual_arr = [];
+            iteration = 0;
+            
+            x0 = x;
+            
+            lb = obj.lower_bound - obj.bound_safe_eps;
+            hb = obj.upper_bound + obj.bound_safe_eps;
+            y = zeros(12, 1); % x (4) + lambda (8)
+            y(1:4) = x;
+            y(5:12) = [1 / (hb - x(1)); ...
+                1 / (hb - x(2)); ...
+                1 / (hb - x(3)); ...
+                1 / (hb - x(4)); ...
+                1 / (x(1) - lb); ...
+                1 / (x(2) - lb); ...
+                1 / (x(3) - lb); ...
+                1 / (x(4) - lb)];
+            lambda = y(5:12);
+            
+            alpha = 0.01; % typically 0.01 to 0.14
+            beta = 0.9; % typically 0.3 to 0.8
+            mu = 1.1;
+            m = 8; % Constraints numbers (i.e., lower_bound < x < upper_bound)
+            
+            % Linearization
+            Jf = calc_trajectory_jacobian(obj, batch.m, batch.J, batch.c, batch.d, ...
+                batch.f_motors, batch.v, batch.p, batch.W, batch.R);
+            Jf_t = Jf.';
+            
+            while 1
+                %fprintf("iteration: %d\n", iteration)
+                
+                % Skip Degenerate Jacobian due to insufficient excitement of the trajectory
+                rcond_JtJ = rcond(Jf.'*obj.G*Jf);
+                if rcond_JtJ < 1e-4
+                    fprintf('x: Degenerate Jacobian detected – skip this time step\n');
+                    x = x0;
+                    ret_x = x;
+                    return;
+                end
+                
+                % Construct constraint vector
+                phi = calc_phi_vector(obj, x);
+                
+                % Deterimine t size of the log barrier
+                gap = calc_duality_gap(obj, phi, lambda);
+                t = mu * m / gap;
+                
+                % Solve primal dual step
+                f_residual = calc_trajectory_residual_vector(obj, batch.m, batch.J, x, batch.f_motors, batch.v, batch.p, batch.W, batch.R);
+                [r_dual, r_cent] = calc_primal_dual_residual_vector(obj, phi, Jf_t, f_residual, lambda, t);
+                pd_residual = [r_dual; r_cent];
+                KKT = calc_primal_dual_kkt_matrix(obj, phi, Jf, Jf_t, lambda);
+                delta_y = -KKT \ pd_residual;
+                
+                % Determin s_max of line backtracking
+                delta_lambda = delta_y(5:12);
+                idx = delta_lambda < 0;
+                if any(idx)
+                    ratios = -lambda(idx) ./ delta_lambda(idx);
+                    s_max = min(1, min(ratios));
+                else
+                    s_max = 1;
+                end
+                s = 0.99 * s_max; % Prevent singluar value at the edge of the constraints
+                
+                % Line backtracking to prevent dual variable to be negative
+                f_residual = calc_trajectory_residual_vector(obj, batch.m, batch.J, x, batch.f_motors, batch.v, batch.p, batch.W, batch.R);
+                [r_dual_last, r_cent_last] = calc_primal_dual_residual_vector(obj, phi, Jf_t, f_residual, lambda, t);
+                r_last = [r_dual_last; r_cent_last];
+                y0 = y;
+                iter = 0;
+                while iter < 50
+                    % Calculate backtracking residual
+                    y = y0 + s*delta_y;
+                    phi = calc_phi_vector(obj, y(1:4));
+                    f_residual = calc_trajectory_residual_vector(obj, batch.m, batch.J, y(1:4), batch.f_motors, batch.v, batch.p, batch.W, batch.R);
+                    [r_dual_now, r_cent_now] = calc_primal_dual_residual_vector(obj, phi, Jf_t, f_residual, y(5:12), t);
+                    r_now = [r_dual_now; r_cent_now];
+                    
+                    % Stop if Armijo condition is fufilled
+                    if norm(r_now) < (1 - alpha*s)*norm(r_last)
+                        break;
+                    end
+                    
+                    % Update step size
+                    s = s * beta;
+                    
+                    % Update iteration
+                    iter = iter + 1;
+                end
+                
+                % Update primal and dual variables
+                x = y(1:4);
+                lambda = y(5:12);
+                gap = calc_duality_gap(obj, phi, lambda);
+                
+                % Profiling
+                x_arr(:, end+1) = x;
+                iteration = iteration + 1;
+                iteration_arr(end+1) = iteration;
+                residual_arr(end+1) = sqrt(f_residual.' * obj.G * f_residual);
+                
+                if norm(r_dual_now) < 1e-6 && gap < 1e-6
+                    break;
+                end
+            end
+            
+            % Profiling
+            if 0
+                figure('Name', 'Efficiency vs Iteration');
+                subplot (4, 1, 1);
+                plot(iteration_arr, x_arr(1, :), 'LineWidth', 1.7);
+                %title('Motor efficiency');
+                xlabel('Iteration number');
+                ylabel('\eta_1');
+                xlim([0, iteration]);
+                ylim([0.2 1.2]);
+                subplot (4, 1, 2);
+                plot(iteration_arr, x_arr(2, :), 'LineWidth', 1.7);
+                xlabel('Iteration number');
+                ylabel('\eta_2');
+                xlim([0, iteration]);
+                ylim([0.2 1.2]);
+                subplot (4, 1, 3);
+                plot(iteration_arr, x_arr(3, :), 'LineWidth', 1.7);
+                xlabel('Iteration number');
+                ylabel('\eta_3');
+                xlim([0, iteration]);
+                ylim([0.2 1.2]);
+                subplot (4, 1, 4);
+                plot(iteration_arr, x_arr(4, :), 'LineWidth', 1.7);
+                xlabel('Iteration number');
+                xlim([0, iteration]);
+                ylim([0.2 1.2]);
+                ylabel('\eta_4');
+                
+                figure('Name', 'Residual vs Iteration');
+                plot(iteration_arr, residual_arr(:), 'LineWidth', 1.7);
+                %title('Motor efficiency');
+                xlabel('Iteration number');
+                ylabel('r');
+                xlim([0, iteration]);
+                set(gca, 'YScale', 'log')
+                
+                pause;
+                close all;
+            end
+            
+            ret_x = x;
+        end
+        
+        function ret_x = run(obj, iteration, batch, x)
+            %ret_x = run_primal(obj, iteration, batch, x);
+            ret_x = run_primal_dual(obj, iteration, batch, x);
         end
     end
 end
