@@ -31,8 +31,8 @@ function quadrotor_sim
     
 	%set initial attitude (DCM)
 	init_attitude(1) = deg2rad(0); %roll
-	init_attitude(2) = deg2rad(0);   %pitch
-	init_attitude(3) = deg2rad(0);   %yaw
+	init_attitude(2) = deg2rad(0); %pitch
+	init_attitude(3) = deg2rad(0); %yaw
 	uav_dynamics.R = math.euler_to_dcm(init_attitude(1), init_attitude(2), init_attitude(3));
 
 	quad_sim_greeting(uav_dynamics, ITERATION_TIMES, init_attitude);
@@ -55,7 +55,7 @@ function quadrotor_sim
 	%   path planning   %
 	%%%%%%%%%%%%%%%%%%%%%
 	% cirular motion
-	radius = 3;        %[m]
+	radius = 3;         %[m]
 	circum_rate = 0.25; %[hz], times of finished a circular trajectory per second
 	yaw_rate = 0.05;    %[hz], times of full rotation around z axis per second
 	for i = 1: ITERATION_TIMES
@@ -101,7 +101,7 @@ function quadrotor_sim
     motor_efficiency_arr = zeros(4, ITERATION_TIMES);
     
     V_start = 12.0;
-    V_end = 10.7;
+    V_end = 10.0;
     voltage = linspace(V_start, V_end, ITERATION_TIMES);
     
     eta_0 = 1.0;

@@ -2,7 +2,7 @@ classdef motor_estimator
     properties
         math;
         
-        n = 10; % Number of trajectory points (-1 for # of segments)
+        n = 30; % Number of trajectory points (-1 for # of segments)
         I = eye(3);
         g = 9.8;
         e3 = [0; 0; 1];
@@ -264,7 +264,7 @@ classdef motor_estimator
                     residual_arr(end+1) = sqrt(f_residual.' * obj.G * f_residual);
                     
                     %disp(norm(x - x_last));
-                    if norm(x - x_last) < 1e-6
+                    if norm(x - x_last) < 1e-5
                         break;
                     end
                 end
@@ -310,11 +310,15 @@ classdef motor_estimator
                 ylabel('\eta_4');
                 
                 figure('Name', 'Residual vs Iteration');
-                plot(iteration_arr, residual_arr(:), 'LineWidth', 1.7);
+                plot(iteration_arr, residual_arr(:), 'o-', ...
+                    'LineWidth', 1.7, ...
+                    'Color', '#1f77b4', ...
+                    'MarkerEdgeColor', '#1f77b4', ...
+                    'MarkerFaceColor', '#1f77b4');
                 xlabel('Iteration number');
-                ylabel('r');
+                ylabel('Residual');
                 xlim([0, iteration]);
-                set(gca, 'YScale', 'log')
+                grid on;
                 
                 pause;
                 close all;
@@ -347,7 +351,7 @@ classdef motor_estimator
             
             alpha = 0.01; % typically 0.01 to 0.14
             beta = 0.9; % typically 0.3 to 0.8
-            mu = 1.1;
+            mu = 1.5;
             m = 8; % Constraints numbers (i.e., lower_bound < x < upper_bound)
             
             % Linearization
@@ -381,7 +385,7 @@ classdef motor_estimator
                 KKT = calc_primal_dual_kkt_matrix(obj, phi, Jf, Jf_t, lambda);
                 delta_y = -KKT \ pd_residual;
                 
-                % Determin s_max of line backtracking
+                % Calculate maximum step size that won't violate KKT conditions
                 delta_lambda = delta_y(5:12);
                 idx = delta_lambda < 0;
                 if any(idx)
@@ -392,30 +396,39 @@ classdef motor_estimator
                 end
                 s = 0.99 * s_max; % Prevent singluar value at the edge of the constraints
                 
-                % Line backtracking to prevent dual variable to be negative
-                f_residual = calc_trajectory_residual_vector(obj, batch.m, batch.J, x, batch.f_motors, batch.v, batch.p, batch.W, batch.R);
-                [r_dual_last, r_cent_last] = calc_primal_dual_residual_vector(obj, phi, Jf_t, f_residual, lambda, t);
-                r_last = [r_dual_last; r_cent_last];
-                y0 = y;
-                iter = 0;
-                while iter < 50
-                    % Calculate backtracking residual
-                    y = y0 + s*delta_y;
+                if 0
+                    % Full step
+                    y = y + s*delta_y;
                     phi = calc_phi_vector(obj, y(1:4));
                     f_residual = calc_trajectory_residual_vector(obj, batch.m, batch.J, y(1:4), batch.f_motors, batch.v, batch.p, batch.W, batch.R);
                     [r_dual_now, r_cent_now] = calc_primal_dual_residual_vector(obj, phi, Jf_t, f_residual, y(5:12), t);
                     r_now = [r_dual_now; r_cent_now];
-                    
-                    % Stop if Armijo condition is fufilled
-                    if norm(r_now) < (1 - alpha*s)*norm(r_last)
-                        break;
+                else
+                    % Line backtracking to prevent dual variable to be negative
+                    f_residual = calc_trajectory_residual_vector(obj, batch.m, batch.J, x, batch.f_motors, batch.v, batch.p, batch.W, batch.R);
+                    [r_dual_last, r_cent_last] = calc_primal_dual_residual_vector(obj, phi, Jf_t, f_residual, lambda, t);
+                    r_last = [r_dual_last; r_cent_last];
+                    y0 = y;
+                    iter = 0;
+                    while iter < 50
+                        % Calculate backtracking residual
+                        y = y0 + s*delta_y;
+                        phi = calc_phi_vector(obj, y(1:4));
+                        f_residual = calc_trajectory_residual_vector(obj, batch.m, batch.J, y(1:4), batch.f_motors, batch.v, batch.p, batch.W, batch.R);
+                        [r_dual_now, r_cent_now] = calc_primal_dual_residual_vector(obj, phi, Jf_t, f_residual, y(5:12), t);
+                        r_now = [r_dual_now; r_cent_now];
+                        
+                        % Stop if Armijo condition is fufilled
+                        if norm(r_now) < (1 - alpha*s)*norm(r_last) + 1e-3 % Add tolerance range due to noise
+                            break;
+                        end
+                        
+                        % Update step size
+                        s = s * beta;
+                        
+                        % Update iteration
+                        iter = iter + 1;
                     end
-                    
-                    % Update step size
-                    s = s * beta;
-                    
-                    % Update iteration
-                    iter = iter + 1;
                 end
                 
                 % Update primal and dual variables
@@ -429,7 +442,7 @@ classdef motor_estimator
                 iteration_arr(end+1) = iteration;
                 residual_arr(end+1) = sqrt(f_residual.' * obj.G * f_residual);
                 
-                if norm(r_dual_now) < 1e-6 && gap < 1e-6
+                if norm(r_dual_now) < 1e-5 && gap < 1e-5
                     break;
                 end
             end
@@ -439,7 +452,7 @@ classdef motor_estimator
                 figure('Name', 'Efficiency vs Iteration');
                 subplot (4, 1, 1);
                 plot(iteration_arr, x_arr(1, :), 'LineWidth', 1.7);
-                %title('Motor efficiency');
+                yline(1, '--k', 'LineWidth', 1);
                 xlabel('Iteration number');
                 ylabel('\eta_1');
                 xlim([0, iteration]);
@@ -464,12 +477,15 @@ classdef motor_estimator
                 ylabel('\eta_4');
                 
                 figure('Name', 'Residual vs Iteration');
-                plot(iteration_arr, residual_arr(:), 'LineWidth', 1.7);
-                %title('Motor efficiency');
+                plot(iteration_arr, residual_arr(:), 'o-', ...
+                    'LineWidth', 1.7, ...
+                    'Color', '#1f77b4', ...
+                    'MarkerEdgeColor', '#1f77b4', ...
+                    'MarkerFaceColor', '#1f77b4');
                 xlabel('Iteration number');
-                ylabel('r');
+                ylabel('Residual');
                 xlim([0, iteration]);
-                set(gca, 'YScale', 'log')
+                grid on;
                 
                 pause;
                 close all;

@@ -23,7 +23,7 @@ x_arr = zeros(4, ITERATION_TIMES);
 x_error_arr = zeros(4, ITERATION_TIMES);
 
 for i = 1:ITERATION_TIMES
-    x = [1; 1; 1; 1];
+    x = [0.5;0.5;0.5;0.5];
     fprintf("iteration: %d\n", i)
     
     batch =  get_new_batch(data, i, estimator.n, 0);
