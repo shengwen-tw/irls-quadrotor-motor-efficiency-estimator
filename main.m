@@ -121,6 +121,7 @@ batch.W = data.W_arr(:, idx:idx_end);
 batch.R = data.R_arr(:, :, idx:idx_end);
 batch.f = data.f_arr(:, idx:idx_end);
 batch.f_motors = data.f_motors_arr(:, idx_end);
+batch.motor_efficiency = data.motor_efficiency_arr(:, idx_end); % Ground truth
 batch.M = data.M_arr(:, idx:idx_end);
 batch.m = data.m;
 batch.J = data.J;

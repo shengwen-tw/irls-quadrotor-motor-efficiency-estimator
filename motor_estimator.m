@@ -205,6 +205,10 @@ classdef motor_estimator
             residual_arr = [];
             iteration = 0;
             
+            iteration = iteration + 1;
+            iteration_arr(end+1) = iteration;
+            x_arr(:, end+1) = x;
+            
             x0 = x;
             x_last = x;
             
@@ -256,9 +260,9 @@ classdef motor_estimator
                     x = x + delta_x;
                     
                     % Profiling
-                    x_arr(:, end+1) = x;
                     iteration = iteration + 1;
                     iteration_arr(end+1) = iteration;
+                    x_arr(:, end+1) = x;
                     
                     f_residual = lambda * calc_trajectory_residual_vector(obj, batch.m, batch.J, x, batch.f_motors, batch.v, batch.p, batch.W, batch.R);
                     residual_arr(end+1) = sqrt(f_residual.' * obj.G * f_residual);
@@ -285,39 +289,51 @@ classdef motor_estimator
             if 0
                 figure('Name', 'Efficiency vs Iteration');
                 subplot (4, 1, 1);
-                plot(iteration_arr, x_arr(1, :), 'LineWidth', 1.7);
+                plot(iteration_arr - 1, x_arr(1, :), 'LineWidth', 1.7);
+                h2 = yline(batch.motor_efficiency(1), '--k', 'Color', 'r', 'LineWidth', 1.7);
+                legend(h2, 'true efficiency', 'Location', 'southeast');
                 xlabel('Iteration number');
                 ylabel('\eta_1');
-                xlim([0, iteration]);
+                xlim([0, iteration - 1]);
                 ylim([0.2 1.2]);
+                grid on;
                 subplot (4, 1, 2);
-                plot(iteration_arr, x_arr(2, :), 'LineWidth', 1.7);
+                plot(iteration_arr - 1, x_arr(2, :), 'LineWidth', 1.7);
+                h2 = yline(batch.motor_efficiency(2), '--k', 'Color', 'r', 'LineWidth', 1.7);
+                legend(h2, 'true efficiency', 'Location', 'southeast');
                 xlabel('Iteration number');
                 ylabel('\eta_2');
-                xlim([0, iteration]);
+                xlim([0, iteration - 1]);
                 ylim([0.2 1.2]);
+                grid on;
                 subplot (4, 1, 3);
-                plot(iteration_arr, x_arr(3, :), 'LineWidth', 1.7);
+                plot(iteration_arr - 1, x_arr(3, :), 'LineWidth', 1.7);
+                h2 = yline(batch.motor_efficiency(3), '--k', 'Color', 'r', 'LineWidth', 1.7);
+                legend(h2, 'true efficiency', 'Location', 'southeast');
                 xlabel('Iteration number');
                 ylabel('\eta_3');
-                xlim([0, iteration]);
+                xlim([0, iteration - 1]);
                 ylim([0.2 1.2]);
+                grid on;
                 subplot (4, 1, 4);
-                plot(iteration_arr, x_arr(4, :), 'LineWidth', 1.7);
+                plot(iteration_arr - 1, x_arr(4, :), 'LineWidth', 1.7);
+                h2 = yline(batch.motor_efficiency(4), '--k', 'Color', 'r', 'LineWidth', 1.7);
+                legend(h2, 'true efficiency', 'Location', 'southeast');
                 xlabel('Iteration number');
-                xlim([0, iteration]);
+                xlim([0, iteration - 1]);
                 ylim([0.2 1.2]);
                 ylabel('\eta_4');
+                grid on;
                 
                 figure('Name', 'Residual vs Iteration');
-                plot(iteration_arr, residual_arr(:), 'o-', ...
+                plot(iteration_arr(2:end) - 1, residual_arr(1:end), 'o-', ...
                     'LineWidth', 1.7, ...
                     'Color', '#1f77b4', ...
                     'MarkerEdgeColor', '#1f77b4', ...
                     'MarkerFaceColor', '#1f77b4');
                 xlabel('Iteration number');
                 ylabel('Residual');
-                xlim([0, iteration]);
+                xlim([1, iteration - 1]);
                 grid on;
                 
                 pause;
@@ -332,6 +348,10 @@ classdef motor_estimator
             iteration_arr = [];
             residual_arr = [];
             iteration = 0;
+            
+            iteration = iteration + 1;
+            iteration_arr(end+1) = iteration;
+            x_arr(:, end+1) = x;
             
             x0 = x;
             
@@ -437,9 +457,9 @@ classdef motor_estimator
                 gap = calc_duality_gap(obj, phi, lambda);
                 
                 % Profiling
-                x_arr(:, end+1) = x;
                 iteration = iteration + 1;
                 iteration_arr(end+1) = iteration;
+                x_arr(:, end+1) = x;
                 residual_arr(end+1) = sqrt(f_residual.' * obj.G * f_residual);
                 
                 if norm(r_dual_now) < 1e-5 && gap < 1e-5
@@ -451,40 +471,51 @@ classdef motor_estimator
             if 0
                 figure('Name', 'Efficiency vs Iteration');
                 subplot (4, 1, 1);
-                plot(iteration_arr, x_arr(1, :), 'LineWidth', 1.7);
-                yline(1, '--k', 'LineWidth', 1);
+                plot(iteration_arr - 1, x_arr(1, :), 'LineWidth', 1.7);
+                h2 = yline(batch.motor_efficiency(1), '--k', 'Color', 'r', 'LineWidth', 1.7);
+                legend(h2, 'true efficiency', 'Location', 'southeast');
                 xlabel('Iteration number');
                 ylabel('\eta_1');
-                xlim([0, iteration]);
+                xlim([0, iteration - 1]);
                 ylim([0.2 1.2]);
+                grid on;
                 subplot (4, 1, 2);
-                plot(iteration_arr, x_arr(2, :), 'LineWidth', 1.7);
+                plot(iteration_arr - 1, x_arr(2, :), 'LineWidth', 1.7);
+                h2 = yline(batch.motor_efficiency(2), '--k', 'Color', 'r', 'LineWidth', 1.7);
+                legend(h2, 'true efficiency', 'Location', 'southeast');
                 xlabel('Iteration number');
                 ylabel('\eta_2');
-                xlim([0, iteration]);
+                xlim([0, iteration - 1]);
                 ylim([0.2 1.2]);
+                grid on;
                 subplot (4, 1, 3);
-                plot(iteration_arr, x_arr(3, :), 'LineWidth', 1.7);
+                plot(iteration_arr - 1, x_arr(3, :), 'LineWidth', 1.7);
+                h2 = yline(batch.motor_efficiency(3), '--k', 'Color', 'r', 'LineWidth', 1.7);
+                legend(h2, 'true efficiency', 'Location', 'southeast');
                 xlabel('Iteration number');
                 ylabel('\eta_3');
-                xlim([0, iteration]);
+                xlim([0, iteration - 1]);
                 ylim([0.2 1.2]);
+                grid on;
                 subplot (4, 1, 4);
-                plot(iteration_arr, x_arr(4, :), 'LineWidth', 1.7);
+                plot(iteration_arr - 1, x_arr(4, :), 'LineWidth', 1.7);
+                h2 = yline(batch.motor_efficiency(4), '--k', 'Color', 'r', 'LineWidth', 1.7);
+                legend(h2, 'true efficiency', 'Location', 'southeast');
                 xlabel('Iteration number');
-                xlim([0, iteration]);
+                xlim([0, iteration - 1]);
                 ylim([0.2 1.2]);
                 ylabel('\eta_4');
+                grid on;
                 
                 figure('Name', 'Residual vs Iteration');
-                plot(iteration_arr, residual_arr(:), 'o-', ...
+                plot(iteration_arr(2:end) - 1, residual_arr(1:end), 'o-', ...
                     'LineWidth', 1.7, ...
                     'Color', '#1f77b4', ...
                     'MarkerEdgeColor', '#1f77b4', ...
                     'MarkerFaceColor', '#1f77b4');
                 xlabel('Iteration number');
                 ylabel('Residual');
-                xlim([0, iteration]);
+                xlim([1, iteration - 1]);
                 grid on;
                 
                 pause;
