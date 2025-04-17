@@ -34,6 +34,9 @@ classdef motor_estimator
         lower_bound = 0;
         upper_bound = 1;
         bound_safe_eps = 1e-3;
+        
+        cond_threshold = 1e4;
+        rcond_threshold;
     end
     
     methods
@@ -41,6 +44,7 @@ classdef motor_estimator
             obj.math = math;
             obj.dt = dt;
             obj.dt2 = dt^2;
+            obj.rcond_threshold = 1 / obj.cond_threshold;
             
             for i = 1:obj.n-1
                 obj.G = blkdiag(obj.G, obj.G_i);
@@ -199,7 +203,9 @@ classdef motor_estimator
             ret = Jf;
         end
         
-        function ret_x = run_primal(obj, iteration, batch, x)
+        function [ret_x, cond_max] = run_primal(obj, iteration, batch, x)
+            cond_max = -9999;
+            
             x_arr = [];
             iteration_arr = [];
             residual_arr = [];
@@ -226,7 +232,11 @@ classdef motor_estimator
                     
                     % Skip Degenerate Jacobian due to insufficient excitement of the trajectory
                     rcond_JtJ = rcond(Jf.'*obj.G*Jf);
-                    if rcond_JtJ < 1e-4
+                    cond_JtJ = 1 / rcond_JtJ;
+                    if cond_JtJ > cond_max
+                        cond_max = cond_JtJ;
+                    end
+                    if rcond_JtJ < obj.rcond_threshold
                         fprintf('x: Degenerate Jacobian detected – skip this time step\n');
                         x = x0;
                         ret_x = x;
@@ -343,7 +353,9 @@ classdef motor_estimator
             ret_x = x;
         end
         
-        function ret_x = run_primal_dual(obj, iteration, batch, x)
+        function [ret_x, cond_max] = run_primal_dual(obj, iteration, batch, x)
+            cond_max = -9999;
+            
             x_arr = [];
             iteration_arr = [];
             residual_arr = [];
@@ -384,7 +396,11 @@ classdef motor_estimator
                 
                 % Skip Degenerate Jacobian due to insufficient excitement of the trajectory
                 rcond_JtJ = rcond(Jf.'*obj.G*Jf);
-                if rcond_JtJ < 1e-4
+                cond_JtJ = 1 / rcond_JtJ;
+                if cond_JtJ > cond_max
+                    cond_max = cond_JtJ;
+                end
+                if rcond_JtJ < obj.rcond_threshold
                     fprintf('x: Degenerate Jacobian detected – skip this time step\n');
                     x = x0;
                     ret_x = x;
@@ -525,9 +541,9 @@ classdef motor_estimator
             ret_x = x;
         end
         
-        function ret_x = run(obj, iteration, batch, x)
-            %ret_x = run_primal(obj, iteration, batch, x);
-            ret_x = run_primal_dual(obj, iteration, batch, x);
+        function [ret_x, cond_max] = run(obj, iteration, batch, x)
+            %[ret_x, cond_max] = run_primal(obj, iteration, batch, x);
+            [ret_x, cond_max] = run_primal_dual(obj, iteration, batch, x);
         end
     end
 end

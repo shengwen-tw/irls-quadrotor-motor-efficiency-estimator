@@ -21,15 +21,16 @@ alpha = 0.05;
 time_arr = zeros(1, ITERATION_TIMES);
 x_arr = zeros(4, ITERATION_TIMES);
 x_error_arr = zeros(4, ITERATION_TIMES);
+cond_arr = zeros(1, ITERATION_TIMES);
 
 for i = 1:ITERATION_TIMES
-    x = [0.5;0.5;0.5;0.5];
+    x = [0.5; 0.5; 0.5; 0.5];
     fprintf("iteration: %d\n", i)
     
     batch =  get_new_batch(data, i, estimator.n, 0);
     
     % Run motor efficiency estimator
-    x = estimator.run(i, batch, x);
+    [x, cond] = estimator.run(i, batch, x);
     
     % Low-pass filter for x
     x_avg = alpha*x + (1-alpha)*x_avg;
@@ -41,6 +42,7 @@ for i = 1:ITERATION_TIMES
     time_arr(i) = i * dt;
     x_arr(:, i) = x;
     x_error_arr(:, i) = true_efficiency(:, i) - x;
+    cond_arr(i) = cond;
 end
 
 % RMSE
@@ -102,6 +104,26 @@ subplot (4, 1, 4);
 plot(time_arr, x_error_arr(4, :));
 xlabel('time [s]');
 ylabel('\eta_4 error');
+
+estimator.cond_threshold
+figure('Name', 'Condition number over time');
+%
+y_thresh = estimator.cond_threshold;
+x_fill = [time_arr(1), time_arr(end), time_arr(end), time_arr(1)];
+y_fill = [y_thresh, y_thresh, max(cond_arr)*1.1, max(cond_arr)*1.1];
+fill(x_fill, y_fill, [1 0.8 0.8], 'EdgeColor', 'none');  % Light red fill
+hold on;
+%
+%plot(time_arr, cond_arr, 'LineWidth', 1.7, 'Color', '#1f77b4');
+bar(time_arr, cond_arr, 'FaceColor', '#1f77b4');
+h2 = yline(estimator.cond_threshold, '--k', 'Color', 'r', 'LineWidth', 1.7);
+legend(h2, 'rejecting threshold');
+xlabel('time [s]');
+ylabel('Condition number of J^TGJ');
+xlim([time_arr(1), time_arr(end)]);
+%ylim([0, 1/estimator.cond_threshold * 1.01])
+set(gca, 'YScale', 'log')
+grid on;
 
 disp("Press any key to leave");
 pause;
