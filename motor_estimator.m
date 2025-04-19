@@ -2,7 +2,7 @@ classdef motor_estimator
     properties
         math;
         
-        n = 30; % Number of trajectory points (-1 for # of segments)
+        n = 10; % Number of trajectory points (-1 for # of segments)
         I = eye(3);
         g = 9.8;
         e3 = [0; 0; 1];
@@ -18,7 +18,7 @@ classdef motor_estimator
             0, 0, 0, 0, 0, 0, 1, 0, 0, 0;  % G_Wx
             0, 0, 0, 0, 0, 0, 0, 1, 0, 0;  % G_Wy
             0, 0, 0, 0, 0, 0, 0, 0, 1, 0;  % G_Wz
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 10]; % G_R
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 1]; % G_R
         G = [];
         
         Dphi = [1, 0, 0, 0; ...
@@ -30,6 +30,8 @@ classdef motor_estimator
             0, 0, -1, 0; ...
             0, 0, 0, -1];
         Dphi_t;
+        
+        mu_smooth = 5e-3;
         
         lower_bound = 0;
         upper_bound = 1;
@@ -76,7 +78,7 @@ classdef motor_estimator
         end
         
         function ret = calc_trajectory_residual_vector(obj, m, J, x, f_motors, v, p, W, R)
-            J_inv = inv(J);
+            J_inv = diag([1/J(1,1); 1/J(2,2); 1/J(3,3)]);
             residual = zeros(10 * (obj.n - 1), 1);
             
             % FIXME
@@ -84,13 +86,18 @@ classdef motor_estimator
             c = 0.009012;
             
             for i=1:obj.n-1
-                f = x(1)*f_motors(1, i) + ...
-                    x(2)*f_motors(2, i) + ...
-                    x(3)*f_motors(3, i) + ...
-                    x(4)*f_motors(4, i);
-                M = [d*(-x(1)*f_motors(1, i) + x(2)*f_motors(2, i) + x(3)*f_motors(3, i) - x(4)*f_motors(4, i)); ...
-                    d*(+x(1)*f_motors(1, i) + x(2)*f_motors(2, i) - x(3)*f_motors(3, i) - x(4)*f_motors(4, i)); ...
-                    c*(-x(1)*f_motors(1, i) + x(2)*f_motors(2, i) - x(3)*f_motors(3, i) + x(4)*f_motors(4, i))];
+                f1 = f_motors(1, i);
+                f2 = f_motors(2, i);
+                f3 = f_motors(3, i);
+                f4 = f_motors(4, i);
+                
+                f = x(1)*f1 + ...
+                    x(2)*f2 + ...
+                    x(3)*f3 + ...
+                    x(4)*f4;
+                M = [d*(-x(1)*f1 + x(2)*f2 + x(3)*f3 - x(4)*f4); ...
+                    d*(+x(1)*f1 + x(2)*f2 - x(3)*f3 - x(4)*f4); ...
+                    c*(-x(1)*f1 + x(2)*f2 - x(3)*f3 + x(4)*f4)];
                 
                 ge3_fRe3m = obj.g*obj.e3 - (f*R(:, :, i)*obj.e3)/m;
                 pred_v = v(:, i) + ge3_fRe3m*obj.dt;
@@ -99,6 +106,7 @@ classdef motor_estimator
                 Jinv_M_WJW = J_inv * (M - cross(W(:, i), J*W(:, i)));
                 pred_W = W(:, i) + Jinv_M_WJW*obj.dt;
                 pred_R = R(:, :, i) * (obj.I + obj.math.hat_map_3x3(W(:, i))*obj.dt);
+                %pred_R = R(:, :, i) * expm(obj.math.hat_map_3x3(W(:, i)) * obj.dt);
                 
                 delta_R = R(:, :, i).' * R(:, :, i+1);
                 delta_pred_R = pred_R.' * R(:, :, i+1);
@@ -129,13 +137,15 @@ classdef motor_estimator
                 lb - x(4)];
         end
         
-        function [r_dual, r_cent] = calc_primal_dual_residual_vector(obj, phi, Jt, f_residual, lambda, t)
-            r_dual = Jt*obj.G*f_residual + obj.Dphi_t*lambda;
+        function [r_dual, r_cent] = calc_primal_dual_residual_vector(obj, x, x_last, phi, Jt, f_residual, lambda, t)
+            grad_smooth = obj.mu_smooth * (x - x_last);
+            r_dual = Jt*obj.G*f_residual + obj.Dphi_t*lambda + grad_smooth;
             r_cent = -diag(lambda)*phi - (1/t)*ones(8, 1);
         end
         
-        function KKT = calc_primal_dual_kkt_matrix(obj, phi, J, Jt, lambda)
-            KKT = [Jt*obj.G*J, obj.Dphi_t; ...
+        function KKT = calc_primal_dual_kkt_matrix(obj, x, x_last, phi, Jt_G_J, lambda)
+            H_smooth = obj.mu_smooth * eye(4);
+            KKT = [Jt_G_J + H_smooth, obj.Dphi_t; ...
                 -diag(lambda)*obj.Dphi, -diag(phi)];
         end
         
@@ -358,9 +368,7 @@ classdef motor_estimator
             ret_x = x;
         end
         
-        function [ret_x, cond_max] = run_primal_dual(obj, iteration, batch, x)
-            cond_max = -9999;
-            
+        function [ret_x, cond] = run_primal_dual(obj, iteration, batch, x, x_last)
             x_arr = [];
             iteration_arr = [];
             residual_arr = [];
@@ -369,8 +377,6 @@ classdef motor_estimator
             iteration = iteration + 1;
             iteration_arr(end+1) = iteration;
             x_arr(:, end+1) = x;
-            
-            x0 = x;
             
             lb = obj.lower_bound - obj.bound_safe_eps;
             hb = obj.upper_bound + obj.bound_safe_eps;
@@ -386,31 +392,28 @@ classdef motor_estimator
                 1 / (x(4) - lb)];
             lambda = y(5:12);
             
-            alpha = 0.1; % typically 0.01 to 0.1
-            beta = 0.8; % typically 0.3 to 0.8
-            mu = 1.3;
-            m = 8; % Constraints numbers (i.e., lower_bound < x < upper_bound)
-            
             % Linearization
             Jf = calc_trajectory_jacobian(obj, batch.m, batch.J, batch.c, batch.d, ...
                 batch.f_motors, batch.v, batch.p, batch.W, batch.R);
             Jf_t = Jf.';
+            Jt_G_J = Jf_t * obj.G * Jf;
             
-            while 1
+            % Skip Degenerate Jacobian due to insufficient excitement of the trajectory
+            rcond_JtJ = rcond(Jf.'*obj.G*Jf);
+            cond = 1 / rcond_JtJ;
+            if rcond_JtJ < obj.rcond_threshold
+                fprintf('x: Degenerate Jacobian detected – skip this time step\n');
+                ret_x = x_last;
+                return;
+            end
+            
+            alpha = 0.1; % typically 0.01 to 0.1
+            beta = 0.5; % typically 0.3 to 0.8
+            mu = 4.5;
+            m = 8; % Constraints numbers (i.e., lower_bound < x < upper_bound)
+            
+            for i = 1:200 % Limit on maximum iteration
                 %fprintf("iteration: %d\n", iteration)
-                
-                % Skip Degenerate Jacobian due to insufficient excitement of the trajectory
-                rcond_JtJ = rcond(Jf.'*obj.G*Jf);
-                cond_JtJ = 1 / rcond_JtJ;
-                if cond_JtJ > cond_max
-                    cond_max = cond_JtJ;
-                end
-                if rcond_JtJ < obj.rcond_threshold
-                    fprintf('x: Degenerate Jacobian detected – skip this time step\n');
-                    x = x0;
-                    ret_x = x;
-                    return;
-                end
                 
                 % Construct constraint vector
                 phi = calc_phi_vector(obj, x);
@@ -421,9 +424,9 @@ classdef motor_estimator
                 
                 % Solve primal dual step
                 f_residual = calc_trajectory_residual_vector(obj, batch.m, batch.J, x, batch.f_motors, batch.v, batch.p, batch.W, batch.R);
-                [r_dual, r_cent] = calc_primal_dual_residual_vector(obj, phi, Jf_t, f_residual, lambda, t);
+                [r_dual, r_cent] = calc_primal_dual_residual_vector(obj, x, x_last, phi, Jf_t, f_residual, lambda, t);
                 pd_residual = [r_dual; r_cent];
-                KKT = calc_primal_dual_kkt_matrix(obj, phi, Jf, Jf_t, lambda);
+                KKT = calc_primal_dual_kkt_matrix(obj, x, x_last, phi, Jt_G_J, lambda);
                 delta_y = -KKT \ pd_residual;
                 
                 % Calculate maximum step size that won't violate KKT conditions
@@ -442,12 +445,12 @@ classdef motor_estimator
                     y = y + s*delta_y;
                     phi = calc_phi_vector(obj, y(1:4));
                     f_residual = calc_trajectory_residual_vector(obj, batch.m, batch.J, y(1:4), batch.f_motors, batch.v, batch.p, batch.W, batch.R);
-                    [r_dual_now, r_cent_now] = calc_primal_dual_residual_vector(obj, phi, Jf_t, f_residual, y(5:12), t);
+                    [r_dual_now, r_cent_now] = calc_primal_dual_residual_vector(obj, x, x_last, phi, Jf_t, f_residual, y(5:12), t);
                     r_now = [r_dual_now; r_cent_now];
                 else
                     % Line backtracking to prevent dual variable to be negative
                     f_residual = calc_trajectory_residual_vector(obj, batch.m, batch.J, x, batch.f_motors, batch.v, batch.p, batch.W, batch.R);
-                    [r_dual_last, r_cent_last] = calc_primal_dual_residual_vector(obj, phi, Jf_t, f_residual, lambda, t);
+                    [r_dual_last, r_cent_last] = calc_primal_dual_residual_vector(obj, x, x_last, phi, Jf_t, f_residual, lambda, t);
                     r_last = [r_dual_last; r_cent_last];
                     y0 = y;
                     iter = 0;
@@ -456,7 +459,7 @@ classdef motor_estimator
                         y = y0 + s*delta_y;
                         phi = calc_phi_vector(obj, y(1:4));
                         f_residual = calc_trajectory_residual_vector(obj, batch.m, batch.J, y(1:4), batch.f_motors, batch.v, batch.p, batch.W, batch.R);
-                        [r_dual_now, r_cent_now] = calc_primal_dual_residual_vector(obj, phi, Jf_t, f_residual, y(5:12), t);
+                        [r_dual_now, r_cent_now] = calc_primal_dual_residual_vector(obj, x, x_last, phi, Jf_t, f_residual, y(5:12), t);
                         r_now = [r_dual_now; r_cent_now];
                         
                         % Stop if Armijo condition is fufilled
@@ -483,7 +486,7 @@ classdef motor_estimator
                 x_arr(:, end+1) = x;
                 residual_arr(end+1) = sqrt(f_residual.' * obj.G * f_residual);
                 
-                if norm(r_dual_now) < 1e-5 && gap < 1e-5
+                if norm(r_dual_now) < 1e-6 && gap < 1e-6
                     break;
                 end
             end
@@ -546,9 +549,9 @@ classdef motor_estimator
             ret_x = x;
         end
         
-        function [ret_x, cond_max] = run(obj, iteration, batch, x)
+        function [ret_x, cond_max] = run(obj, iteration, batch, x, x_last)
             %[ret_x, cond_max] = run_primal(obj, iteration, batch, x);
-            [ret_x, cond_max] = run_primal_dual(obj, iteration, batch, x);
+            [ret_x, cond_max] = run_primal_dual(obj, iteration, batch, x, x_last);
         end
     end
 end
