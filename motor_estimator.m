@@ -58,26 +58,6 @@ classdef motor_estimator
             ret = obj;
         end
         
-        function ret = calc_log_barrier_gradient(obj, x)
-            hb = obj.upper_bound + obj.bound_safe_eps;
-            lb = obj.lower_bound - obj.bound_safe_eps;
-            ret = ...
-                [1/(hb-x(1)) - 1/(x(1)-lb); ...
-                1/(hb-x(2)) - 1/(x(2)-lb); ...
-                1/(hb-x(3)) - 1/(x(3)-lb); ...
-                1/(hb-x(4)) - 1/(x(4)-lb)];
-        end
-        
-        function ret = calc_log_barrier_hessian(obj, x)
-            hb = obj.upper_bound + obj.bound_safe_eps;
-            lb = obj.lower_bound - obj.bound_safe_eps;
-            H11 = 1/((hb-x(1))^2) + 1/((x(1)-lb)^2);
-            H22 = 1/((hb-x(2))^2) + 1/((x(2)-lb)^2);
-            H33 = 1/((hb-x(3))^2) + 1/((x(3)-lb)^2);
-            H44 = 1/((hb-x(4))^2) + 1/((x(4)-lb)^2);
-            ret = diag([H11, H22, H33, H44]);
-        end
-        
         function ret = calc_trajectory_residual_vector(obj, m, J, x, f_motors, v, p, W, R)
             J_inv = diag([1/J(1,1); 1/J(2,2); 1/J(3,3)]);
             residual = zeros(10 * (obj.n - 1), 1);
@@ -219,156 +199,6 @@ classdef motor_estimator
             ret = Jf;
         end
         
-        function [ret_x, cond_max] = run_primal(obj, iteration, batch, x)
-            cond_max = -9999;
-            
-            x_arr = [];
-            iteration_arr = [];
-            residual_arr = [];
-            iteration = 0;
-            
-            iteration = iteration + 1;
-            iteration_arr(end+1) = iteration;
-            x_arr(:, end+1) = x;
-            
-            x0 = x;
-            x_last = x;
-            
-            lambda = 1e-5;
-            mu = 5;
-            m = 8; % Constraints numbers  (i.e., lower_bound < x < upper_bound)
-            while (m / lambda) > 1e-6 % Outer loop for log barrier control
-                while 1 % Inner loop for minimization
-                    %fprintf("iteration: %d\n", iteration)
-                    
-                    % Linearization
-                    Jf = lambda * calc_trajectory_jacobian(obj, batch.m, batch.J, batch.c, batch.d, ...
-                        batch.f_motors, batch.v, batch.p, batch.W, batch.R);
-                    Jf_t = Jf.';
-                    
-                    % Skip Degenerate Jacobian due to insufficient excitement of the trajectory
-                    rcond_JtJ = rcond(Jf.'*obj.G*Jf);
-                    cond_JtJ = 1 / rcond_JtJ;
-                    if cond_JtJ > cond_max
-                        cond_max = cond_JtJ;
-                    end
-                    if rcond_JtJ < obj.rcond_threshold
-                        fprintf('x: Degenerate Jacobian detected – skip this time step\n');
-                        x = x0;
-                        ret_x = x;
-                        return;
-                    end
-                    
-                    % Calculate log barrier gradient and hessian
-                    G_log = calc_log_barrier_gradient(obj, x);
-                    H_log = calc_log_barrier_hessian(obj, x);
-                    
-                    % Calculate Gauss-Newton Step
-                    f_residual = lambda * calc_trajectory_residual_vector(obj, batch.m, batch.J, x, batch.f_motors, batch.v, batch.p, batch.W, batch.R);
-                    
-                    % Solve linear system for optimal delta x
-                    A = Jf_t * obj.G * Jf + H_log;
-                    b = -(Jf_t * obj.G * f_residual + G_log);
-                    
-                    tic;
-                    % Solve linear system with Cholesky decomposition
-                    L = chol(A, 'lower');
-                    delta_x = L.' \ (L \ b);
-                    
-                    % Solve linear system without exploiting the structure
-                    %delta_x = A \ b;
-                    time = toc;
-                    
-                    %fprintf("time = %f seconds\n", time);
-                    
-                    % Update x
-                    x_last = x;
-                    x = x + delta_x;
-                    
-                    % Profiling
-                    iteration = iteration + 1;
-                    iteration_arr(end+1) = iteration;
-                    x_arr(:, end+1) = x;
-                    
-                    f_residual = lambda * calc_trajectory_residual_vector(obj, batch.m, batch.J, x, batch.f_motors, batch.v, batch.p, batch.W, batch.R);
-                    residual_arr(end+1) = sqrt(f_residual.' * obj.G * f_residual);
-                    
-                    %disp(norm(x - x_last));
-                    if norm(x - x_last) < 1e-5
-                        break;
-                    end
-                end
-                
-                % Projection step
-                for i = 1:4
-                    if x(i) > obj.upper_bound
-                        x(i) = obj.upper_bound;
-                    elseif x(i) < obj.lower_bound
-                        x(i) = obj.lower_bound;
-                    end
-                end
-                
-                lambda = mu * lambda;
-            end
-            
-            % Profiling
-            if 0
-                figure('Name', 'Efficiency vs Iteration');
-                subplot (4, 1, 1);
-                plot(iteration_arr - 1, x_arr(1, :), 'LineWidth', 1.7);
-                h2 = yline(batch.motor_efficiency(1), '--k', 'Color', 'r', 'LineWidth', 1.7);
-                legend(h2, 'true efficiency', 'Location', 'southeast');
-                xlabel('Iteration number');
-                ylabel('\eta_1');
-                xlim([0, iteration - 1]);
-                ylim([0.2 1.2]);
-                grid on;
-                subplot (4, 1, 2);
-                plot(iteration_arr - 1, x_arr(2, :), 'LineWidth', 1.7);
-                h2 = yline(batch.motor_efficiency(2), '--k', 'Color', 'r', 'LineWidth', 1.7);
-                legend(h2, 'true efficiency', 'Location', 'southeast');
-                xlabel('Iteration number');
-                ylabel('\eta_2');
-                xlim([0, iteration - 1]);
-                ylim([0.2 1.2]);
-                grid on;
-                subplot (4, 1, 3);
-                plot(iteration_arr - 1, x_arr(3, :), 'LineWidth', 1.7);
-                h2 = yline(batch.motor_efficiency(3), '--k', 'Color', 'r', 'LineWidth', 1.7);
-                legend(h2, 'true efficiency', 'Location', 'southeast');
-                xlabel('Iteration number');
-                ylabel('\eta_3');
-                xlim([0, iteration - 1]);
-                ylim([0.2 1.2]);
-                grid on;
-                subplot (4, 1, 4);
-                plot(iteration_arr - 1, x_arr(4, :), 'LineWidth', 1.7);
-                h2 = yline(batch.motor_efficiency(4), '--k', 'Color', 'r', 'LineWidth', 1.7);
-                legend(h2, 'true efficiency', 'Location', 'southeast');
-                xlabel('Iteration number');
-                xlim([0, iteration - 1]);
-                ylim([0.2 1.2]);
-                ylabel('\eta_4');
-                grid on;
-                
-                figure('Name', 'Residual vs Iteration');
-                plot(iteration_arr(2:end) - 1, residual_arr(1:end), 'o-', ...
-                    'LineWidth', 1.7, ...
-                    'Color', '#1f77b4', ...
-                    'MarkerEdgeColor', '#1f77b4', ...
-                    'MarkerFaceColor', '#1f77b4');
-                xlabel('Iteration number');
-                ylabel('Residual');
-                xlim([1, iteration - 1]);
-                grid on;
-                
-                pause;
-                close all;
-            end
-            
-            ret_x = x;
-        end
-        
         function [ret_x, cond] = run_primal_dual(obj, iteration, batch, x, x_last)
             x_arr = [];
             iteration_arr = [];
@@ -496,36 +326,37 @@ classdef motor_estimator
             if 0
                 figure('Name', 'Efficiency vs Iteration');
                 subplot (4, 1, 1);
-                plot(iteration_arr - 1, x_arr(1, :), 'LineWidth', 1.7);
+                h1 = plot(iteration_arr - 1, x_arr(1, :), 'LineWidth', 1.7);
                 h2 = yline(batch.motor_efficiency(1), '--k', 'Color', 'r', 'LineWidth', 1.7);
-                legend(h2, 'true efficiency', 'Location', 'southeast');
+                legend('Estimated', 'True', 'Location', 'southeast', 'Orientation', 'horizontal');
+                title('Motor efficiency: Estimated vs True');
                 xlabel('Iteration number');
                 ylabel('\eta_1');
                 xlim([0, iteration - 1]);
                 ylim([0.2 1.2]);
                 grid on;
                 subplot (4, 1, 2);
-                plot(iteration_arr - 1, x_arr(2, :), 'LineWidth', 1.7);
+                h1 = plot(iteration_arr - 1, x_arr(2, :), 'LineWidth', 1.7);
                 h2 = yline(batch.motor_efficiency(2), '--k', 'Color', 'r', 'LineWidth', 1.7);
-                legend(h2, 'true efficiency', 'Location', 'southeast');
+                legend('Estimated', 'True', 'Location', 'southeast', 'Orientation', 'horizontal');
                 xlabel('Iteration number');
                 ylabel('\eta_2');
                 xlim([0, iteration - 1]);
                 ylim([0.2 1.2]);
                 grid on;
                 subplot (4, 1, 3);
-                plot(iteration_arr - 1, x_arr(3, :), 'LineWidth', 1.7);
+                h1 = plot(iteration_arr - 1, x_arr(3, :), 'LineWidth', 1.7);
                 h2 = yline(batch.motor_efficiency(3), '--k', 'Color', 'r', 'LineWidth', 1.7);
-                legend(h2, 'true efficiency', 'Location', 'southeast');
+                legend('Estimated', 'True', 'Location', 'southeast', 'Orientation', 'horizontal');
                 xlabel('Iteration number');
                 ylabel('\eta_3');
                 xlim([0, iteration - 1]);
                 ylim([0.2 1.2]);
                 grid on;
                 subplot (4, 1, 4);
-                plot(iteration_arr - 1, x_arr(4, :), 'LineWidth', 1.7);
+                h1 = plot(iteration_arr - 1, x_arr(4, :), 'LineWidth', 1.7);
                 h2 = yline(batch.motor_efficiency(4), '--k', 'Color', 'r', 'LineWidth', 1.7);
-                legend(h2, 'true efficiency', 'Location', 'southeast');
+                legend('Estimated', 'True', 'Location', 'southeast', 'Orientation', 'horizontal');
                 xlabel('Iteration number');
                 xlim([0, iteration - 1]);
                 ylim([0.2 1.2]);
@@ -538,9 +369,10 @@ classdef motor_estimator
                     'Color', '#1f77b4', ...
                     'MarkerEdgeColor', '#1f77b4', ...
                     'MarkerFaceColor', '#1f77b4');
-                xlabel('Iteration number');
-                ylabel('Residual');
+                xlabel('Iterations');
+                ylabel('Residual norm');
                 xlim([1, iteration - 1]);
+                title('Residual norm vs Iteration');
                 grid on;
                 
                 pause;
@@ -551,7 +383,6 @@ classdef motor_estimator
         end
         
         function [ret_x, cond_max] = run(obj, iteration, batch, x, x_last)
-            %[ret_x, cond_max] = run_primal(obj, iteration, batch, x);
             [ret_x, cond_max] = run_primal_dual(obj, iteration, batch, x, x_last);
         end
     end
