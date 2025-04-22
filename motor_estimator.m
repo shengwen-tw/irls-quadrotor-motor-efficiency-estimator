@@ -154,21 +154,19 @@ classdef motor_estimator
                 r32 = R(3,2,i);
                 r33 = R(3,3,i);
                 
+                fR = [f1*r31, f2*r31, f3*r31, f4*r31; ...
+                    f1*r32, f2*r32, f3*r32, f4*r32; ...
+                    f1*r33, f2*r33, f3*r33, f4*r33];
+                
                 % d(res_v)/dx
                 r_start = 10*(i-1)+1;
                 r_end =   10*(i-1)+3;
-                Jf(r_start:r_end, 1:4) = obj.dt/m * ...
-                    [f1*r31, f2*r31, f3*r31, f4*r31; ...
-                    f1*r32, f2*r32, f3*r32, f4*r32; ...
-                    f1*r33, f2*r33, f3*r33, f4*r33];
+                Jf(r_start:r_end, 1:4) = obj.dt/m * fR;
                 
                 % d(res_p)/dx
                 r_start = 10*(i-1)+4;
                 r_end =   10*(i-1)+6;
-                Jf(r_start:r_end, 1:4) = obj.dt2/(2*m) * ...
-                    [f1*r31, f2*r31, f3*r31, f4*r31; ...
-                    f1*r32, f2*r32, f3*r32, f4*r32; ...
-                    f1*r33, f2*r33, f3*r33, f4*r33];
+                Jf(r_start:r_end, 1:4) = obj.dt2/(2*m) * fR;
                 
                 % d(res_W)/dx
                 r_start = 10*(i-1)+7;
@@ -181,18 +179,21 @@ classdef motor_estimator
                 % d(res_R)/dx
                 r_start = 10*(i-1)+10;
                 r_end =   10*(i-1)+10;
-                r1 = -((delta_R(2,3)-delta_R(3,2))*f1*d)/Jx ...
-                    +((delta_R(3,1)-delta_R(1,3))*f1*d)/Jy ...
-                    -((delta_R(1,2)-delta_R(2,1))*f1*c)/Jz;
-                r2 = +((delta_R(2,3)-delta_R(3,2))*f2*d)/Jx ...
-                    +((delta_R(3,1)-delta_R(1,3))*f2*d)/Jy ...
-                    +((delta_R(1,2)-delta_R(2,1))*f2*c)/Jz;
-                r3 = +((delta_R(2,3)-delta_R(3,2))*f3*d)/Jx ...
-                    -((delta_R(3,1)-delta_R(1,3))*f3*d)/Jy ...
-                    -((delta_R(1,2)-delta_R(2,1))*f3*c)/Jz;
-                r4 = -((delta_R(2,3)-delta_R(3,2))*f4*d)/Jx ...
-                    - ((delta_R(3,1)-delta_R(1,3))*f4*d)/Jy ...
-                    + ((delta_R(1,2)-delta_R(2,1))*f4*c)/Jz;
+                r23_r32 = delta_R(2,3)-delta_R(3,2);
+                r31_r13 = delta_R(3,1)-delta_R(1,3);
+                r12_r21 = delta_R(1,2)-delta_R(2,1);
+                r1 = -r23_r32*f1*d/Jx ...
+                    +r31_r13*f1*d/Jy ...
+                    -r12_r21*f1*c/Jz;
+                r2 = +r23_r32*f2*d/Jx ...
+                    +r31_r13*f2*d/Jy ...
+                    +r12_r21*f2*c/Jz;
+                r3 = +r23_r32*f3*d/Jx ...
+                    -r31_r13*f3*d/Jy ...
+                    -r12_r21*f3*c/Jz;
+                r4 = -r23_r32*f4*d/Jx ...
+                    -r31_r13*f4*d/Jy ...
+                    +r12_r21*f4*c/Jz;
                 Jf(r_start:r_end, 1:4) = obj.dt2 * [r1, r2, r3, r4] / 2;
             end
             
@@ -324,7 +325,7 @@ classdef motor_estimator
             
             % Profiling
             if 0
-                figure('Name', 'Efficiency vs Iteration');
+                fig = figure('Name', 'Efficiency vs Iteration');
                 subplot (4, 1, 1);
                 h1 = plot(iteration_arr - 1, x_arr(1, :), 'LineWidth', 1.7);
                 h2 = yline(batch.motor_efficiency(1), '--k', 'Color', 'r', 'LineWidth', 1.7);
@@ -362,8 +363,9 @@ classdef motor_estimator
                 ylim([0.2 1.2]);
                 ylabel('\eta_4');
                 grid on;
+                exportgraphics(fig, 'efficiency_iteration.png');
                 
-                figure('Name', 'Residual vs Iteration');
+                fig = figure('Name', 'Residual vs Iteration');
                 plot(iteration_arr(2:end) - 1, residual_arr(1:end), 'o-', ...
                     'LineWidth', 1.7, ...
                     'Color', '#1f77b4', ...
@@ -374,6 +376,7 @@ classdef motor_estimator
                 xlim([1, iteration - 1]);
                 title('Residual norm vs Iteration');
                 grid on;
+                exportgraphics(fig, 'residual_iteration.png');
                 
                 pause;
                 close all;

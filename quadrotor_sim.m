@@ -18,7 +18,7 @@ function quadrotor_sim
 		              0 0 0.02848];
     d = 0.225;    %[m], distance of quadrotor's center to motor location
     c = 0.009012; %[N*m/(rad/s)^2]
-    noise_level = 0.2;
+    noise_level = 0.1;
     
     A = [1, 1, 1, 1;
         -d, d, d, -d;
@@ -465,7 +465,7 @@ function quadrotor_sim
 	ylabel('\eta_4');
     ylim([0.2 1.2]);
 
-    figure('Name', '3D Trajectory: Planned vs Actual');
+    fig = figure('Name', '3D Trajectory: Planned vs Actual');
     plot3(xd(1, :), xd(2, :), xd(3, :), 'b-', 'LineWidth', 2); % Planned
     hold on;
     plot3(pos_arr(1, :), pos_arr(2, :), pos_arr(3, :), 'r--', 'LineWidth', 2); % Actual
@@ -482,6 +482,7 @@ function quadrotor_sim
     zlabel('z [m]');
     title('Trajectory: Planned vs Actual');
     legend('Planned trajectory', 'Actual trajectory', 'Location', 'northeast');
+    exportgraphics(fig, 'flight_traj.png');
 
 	disp("Press any key to leave");
 	pause;

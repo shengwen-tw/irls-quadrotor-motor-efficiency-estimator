@@ -47,7 +47,7 @@ fprintf("Variance = (%f, %f, %f, %f)\n", variance(1), variance(2), variance(3), 
 fprintf("Standard Deviation = (%f, %f, %f, %f)\n", std_dev(1), std_dev(2), std_dev(3), std_dev(4));
 
 % Estimation result
-figure('Name', 'Motor efficiency: Estimated vs True');
+fig_eff = figure('Name', 'Motor efficiency: Estimated vs True');
 subplot (4, 1, 1);
 h1 = plot(time_arr, x_arr(1, :), 'LineWidth', 1.7);
 hold on;
@@ -55,7 +55,7 @@ h2 = plot(time_arr, true_efficiency(1, 1:ITERATION_TIMES), 'r', 'LineWidth', 1.7
 legend('Estimated', 'True', 'Location', 'Best', 'Orientation', 'horizontal');
 title('Motor efficiency: Estimated vs True');
 xlabel('time [s]');
-ylabel('\eta_1');
+ylabel('\eta_1', 'FontSize', 11);
 ylim([0.2 1.2]);
 grid on;
 subplot (4, 1, 2);
@@ -64,7 +64,7 @@ hold on;
 h2 = plot(time_arr, true_efficiency(2, 1:ITERATION_TIMES), 'r', 'LineWidth', 1.7);
 legend('Estimated', 'True', 'Location', 'Best', 'Orientation', 'horizontal');
 xlabel('time [s]');
-ylabel('\eta_2');
+ylabel('\eta_2', 'FontSize', 11);
 ylim([0.2 1.2]);
 grid on;
 subplot (4, 1, 3);
@@ -73,7 +73,7 @@ hold on;
 h2 = plot(time_arr, true_efficiency(3, 1:ITERATION_TIMES), 'r', 'LineWidth', 1.7);
 legend('Estimated', 'True', 'Location', 'Best', 'Orientation', 'horizontal');
 xlabel('time [s]');
-ylabel('\eta_3');
+ylabel('\eta_3', 'FontSize', 11);
 ylim([0.2 1.2]);
 grid on;
 subplot (4, 1, 4);
@@ -82,9 +82,10 @@ hold on;
 h2 = plot(time_arr, true_efficiency(4, 1:ITERATION_TIMES), 'r', 'LineWidth', 1.7);
 legend('Estimated', 'True', 'Location', 'Best', 'Orientation', 'horizontal');
 xlabel('time [s]');
-ylabel('\eta_4');
+ylabel('\eta_4', 'FontSize', 11);
 ylim([0.2 1.2]);
 grid on;
+exportgraphics(fig_eff, 'estimation_result.png');
 
 % Error
 figure('Name', 'Error of motor efficiency');
@@ -110,7 +111,7 @@ xlabel('time [s]');
 ylabel('\eta_4 error');
 grid on;
 
-figure('Name', 'Condition number over time');
+fig = figure('Name', 'Condition number over time');
 %
 y_thresh = estimator.cond_threshold;
 x_fill = [time_arr(1), time_arr(end), time_arr(end), time_arr(1)];
@@ -128,6 +129,7 @@ xlim([time_arr(1), time_arr(end)]);
 %ylim([0, 1/estimator.cond_threshold * 1.01])
 set(gca, 'YScale', 'log')
 grid on;
+exportgraphics(fig, 'cond.png');
 
 disp("Press any key to leave");
 pause;
