@@ -477,10 +477,10 @@ function quadrotor_sim
     xticks(-5:2.5:5);
     yticks(-5:2.5:5);
     zticks(-5:2.5:5);
-    xlabel('x [m]');
-    ylabel('y [m]');
-    zlabel('z [m]');
-    title('Trajectory: Planned vs Actual');
+    xlabel('x [m]', 'FontSize', 11);
+    ylabel('y [m]', 'FontSize', 11);
+    zlabel('z [m]', 'FontSize', 11);
+    title('Trajectory: Planned vs Actual', 'FontSize', 11);
     legend('Planned trajectory', 'Actual trajectory', 'Location', 'northeast');
     exportgraphics(fig, 'flight_traj.png');
 

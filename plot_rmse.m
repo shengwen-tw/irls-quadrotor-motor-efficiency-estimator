@@ -54,8 +54,8 @@ for subplot_idx = 1:3
     yticks(0:0.01:y_max);                     % Set fine ticks
     ylim([0 y_max]);                          % Match the y-axis limits
     
-    title(titles{subplot_idx}, 'FontWeight', 'bold');
-    ylabel('RMSE');
+    title(titles{subplot_idx}, 'FontSize', 11);
+    ylabel('RMSE', 'FontSize', 11);
     grid on;
     box on;
     
@@ -63,7 +63,7 @@ for subplot_idx = 1:3
     lgd.NumColumns = 2;
     
     if subplot_idx == 3
-        xlabel('Noise level [%]');
+        xlabel('Noise level [%]', 'FontSize', 11);
     end
 end
 

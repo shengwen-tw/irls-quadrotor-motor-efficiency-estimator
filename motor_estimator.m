@@ -330,9 +330,9 @@ classdef motor_estimator
                 h1 = plot(iteration_arr - 1, x_arr(1, :), 'LineWidth', 1.7);
                 h2 = yline(batch.motor_efficiency(1), '--k', 'Color', 'r', 'LineWidth', 1.7);
                 legend('Estimated', 'True', 'Location', 'southeast', 'Orientation', 'horizontal');
-                title('Motor efficiency: Estimated vs True');
-                xlabel('Iteration number');
-                ylabel('\eta_1');
+                title('Motor efficiency: Estimated vs True', 'FontSize', 11);
+                xlabel('Iteration number', 'FontSize', 11);
+                ylabel('\eta_1', 'FontSize', 11);
                 xlim([0, iteration - 1]);
                 ylim([0.2 1.2]);
                 grid on;
@@ -340,8 +340,8 @@ classdef motor_estimator
                 h1 = plot(iteration_arr - 1, x_arr(2, :), 'LineWidth', 1.7);
                 h2 = yline(batch.motor_efficiency(2), '--k', 'Color', 'r', 'LineWidth', 1.7);
                 legend('Estimated', 'True', 'Location', 'southeast', 'Orientation', 'horizontal');
-                xlabel('Iteration number');
-                ylabel('\eta_2');
+                xlabel('Iteration number', 'FontSize', 11);
+                ylabel('\eta_2', 'FontSize', 11);
                 xlim([0, iteration - 1]);
                 ylim([0.2 1.2]);
                 grid on;
@@ -349,8 +349,8 @@ classdef motor_estimator
                 h1 = plot(iteration_arr - 1, x_arr(3, :), 'LineWidth', 1.7);
                 h2 = yline(batch.motor_efficiency(3), '--k', 'Color', 'r', 'LineWidth', 1.7);
                 legend('Estimated', 'True', 'Location', 'southeast', 'Orientation', 'horizontal');
-                xlabel('Iteration number');
-                ylabel('\eta_3');
+                xlabel('Iteration number', 'FontSize', 11);
+                ylabel('\eta_3', 'FontSize', 11);
                 xlim([0, iteration - 1]);
                 ylim([0.2 1.2]);
                 grid on;
@@ -358,10 +358,10 @@ classdef motor_estimator
                 h1 = plot(iteration_arr - 1, x_arr(4, :), 'LineWidth', 1.7);
                 h2 = yline(batch.motor_efficiency(4), '--k', 'Color', 'r', 'LineWidth', 1.7);
                 legend('Estimated', 'True', 'Location', 'southeast', 'Orientation', 'horizontal');
-                xlabel('Iteration number');
+                xlabel('Iteration number', 'FontSize', 11);
+                ylabel('\eta_4', 'FontSize', 11);
                 xlim([0, iteration - 1]);
                 ylim([0.2 1.2]);
-                ylabel('\eta_4');
                 grid on;
                 exportgraphics(fig, 'efficiency_iteration.png');
                 
@@ -371,10 +371,10 @@ classdef motor_estimator
                     'Color', '#1f77b4', ...
                     'MarkerEdgeColor', '#1f77b4', ...
                     'MarkerFaceColor', '#1f77b4');
-                xlabel('Iterations');
-                ylabel('Residual norm');
+                xlabel('Iterations', 'FontSize', 11);
+                ylabel('Residual norm', 'FontSize', 11);
                 xlim([1, iteration - 1]);
-                title('Residual norm vs Iteration');
+                title('Residual norm vs Iteration', 'FontSize', 11);
                 grid on;
                 exportgraphics(fig, 'residual_iteration.png');
                 
