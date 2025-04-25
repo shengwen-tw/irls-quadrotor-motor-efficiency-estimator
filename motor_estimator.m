@@ -204,6 +204,8 @@ classdef motor_estimator
             x_arr = [];
             iteration_arr = [];
             residual_arr = [];
+            r_dual_now_arr = [];
+            gap_arr = [];
             iteration = 0;
             
             iteration = iteration + 1;
@@ -317,6 +319,8 @@ classdef motor_estimator
                 iteration_arr(end+1) = iteration;
                 x_arr(:, end+1) = x;
                 residual_arr(end+1) = sqrt(f_residual.' * obj.G * f_residual);
+                r_dual_now_arr(end+1) = norm(r_dual_now);
+                gap_arr(end+1) = gap;
                 
                 if norm(r_dual_now) < 1e-6 && gap < 1e-6
                     break;
@@ -324,7 +328,7 @@ classdef motor_estimator
             end
             
             % Profiling
-            if 0
+            if 1
                 fig = figure('Name', 'Efficiency vs Iteration');
                 subplot (4, 1, 1);
                 h1 = plot(iteration_arr - 1, x_arr(1, :), 'LineWidth', 1.7);
@@ -340,7 +344,7 @@ classdef motor_estimator
                 h1 = plot(iteration_arr - 1, x_arr(2, :), 'LineWidth', 1.7);
                 h2 = yline(batch.motor_efficiency(2), '--k', 'Color', 'r', 'LineWidth', 1.7);
                 legend('Estimated', 'True', 'Location', 'southeast', 'Orientation', 'horizontal');
-                xlabel('Iteration number', 'FontSize', 11);
+                xlabel('Iterations', 'FontSize', 11);
                 ylabel('\eta_2', 'FontSize', 11);
                 xlim([0, iteration - 1]);
                 ylim([0.2 1.2]);
@@ -349,7 +353,7 @@ classdef motor_estimator
                 h1 = plot(iteration_arr - 1, x_arr(3, :), 'LineWidth', 1.7);
                 h2 = yline(batch.motor_efficiency(3), '--k', 'Color', 'r', 'LineWidth', 1.7);
                 legend('Estimated', 'True', 'Location', 'southeast', 'Orientation', 'horizontal');
-                xlabel('Iteration number', 'FontSize', 11);
+                xlabel('Iterations', 'FontSize', 11);
                 ylabel('\eta_3', 'FontSize', 11);
                 xlim([0, iteration - 1]);
                 ylim([0.2 1.2]);
@@ -358,7 +362,7 @@ classdef motor_estimator
                 h1 = plot(iteration_arr - 1, x_arr(4, :), 'LineWidth', 1.7);
                 h2 = yline(batch.motor_efficiency(4), '--k', 'Color', 'r', 'LineWidth', 1.7);
                 legend('Estimated', 'True', 'Location', 'southeast', 'Orientation', 'horizontal');
-                xlabel('Iteration number', 'FontSize', 11);
+                xlabel('Iterations', 'FontSize', 11);
                 ylabel('\eta_4', 'FontSize', 11);
                 xlim([0, iteration - 1]);
                 ylim([0.2 1.2]);
@@ -377,6 +381,60 @@ classdef motor_estimator
                 title('Residual norm vs Iteration', 'FontSize', 11);
                 grid on;
                 exportgraphics(fig, 'residual_iteration.png');
+                
+                fig = figure('Name', 'KKT dual residual vs Iteration');
+                plot(iteration_arr(2:end) - 1, r_dual_now_arr(1:end), 'o-', ...
+                    'LineWidth', 1.7, ...
+                    'Color', '#1f77b4', ...
+                    'MarkerEdgeColor', '#1f77b4', ...
+                    'MarkerFaceColor', '#1f77b4');
+                xlabel('Iterations', 'FontSize', 11);
+                ylabel('$\|\textbf{r}_{\textbf{dual}}\|$', 'Interpreter', 'latex', 'FontSize', 11);
+                xlim([1, iteration - 1]);
+                title('KKT dual residual convergence', 'FontSize', 11);
+                grid on;
+                
+                fig = figure('Name', 'Gap vs Iteration');
+                plot(iteration_arr(2:end) - 1, gap_arr(1:end), 'o-', ...
+                    'LineWidth', 1.7, ...
+                    'Color', '#1f77b4', ...
+                    'MarkerEdgeColor', '#1f77b4', ...
+                    'MarkerFaceColor', '#1f77b4');
+                xlabel('Iterations', 'FontSize', 11);
+                ylabel('$\mathbf{\hat{\delta}}$', 'Interpreter', 'latex', 'FontSize', 11);
+                xlim([1, iteration - 1]);
+                title('Surrogate duality gap convergence', 'FontSize', 11);
+                grid on;
+                
+                fig = figure('Name', 'KKT dual residual norm vs Iteration');
+                subplot(2, 1, 1);
+                plot(iteration_arr(2:end) - 1, r_dual_now_arr(1:end), 'o-', ...
+                    'LineWidth', 1.7, ...
+                    'Color', '#1f77b4', ...
+                    'MarkerEdgeColor', '#1f77b4', ...
+                    'MarkerFaceColor', '#1f77b4');
+                xlabel('Iterations', 'FontSize', 11);
+                ylabel('$\|\textbf{r}_{\textbf{dual}}\|$', 'Interpreter', 'latex', 'FontSize', 11);
+                xlim([1, iteration - 1]);
+                title('KKT dual residual convergence (log)', 'FontSize', 11);
+                grid on;
+                set(gca, 'YScale', 'log');
+                yticks(10.^(-10:1));
+                %
+                subplot(2, 1, 2);
+                plot(iteration_arr(2:end) - 1, gap_arr(1:end), 'o-', ...
+                    'LineWidth', 1.7, ...
+                    'Color', '#1f77b4', ...
+                    'MarkerEdgeColor', '#1f77b4', ...
+                    'MarkerFaceColor', '#1f77b4');
+                xlabel('Iterations', 'FontSize', 11);
+                ylabel('$\mathbf{\hat{\delta}}$', 'Interpreter', 'latex', 'FontSize', 11);
+                xlim([1, iteration - 1]);
+                title('Surrogate duality gap convergence  (log)', 'FontSize', 11);
+                grid on;
+                set(gca, 'YScale', 'log');
+                yticks([1e-12 1e-10 1e-8 1e-6 1e-4 1e-2 1]);
+                exportgraphics(fig, 'kkt_convergence.png');
                 
                 pause;
                 close all;
