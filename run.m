@@ -1,5 +1,13 @@
 math = se3_math;
-estimator = motor_estimator;
+
+% Run `quadrotor_sim.m` to generate dataset first
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% EKF: Baseline, has larger spikes                %
+% Non-linear Least Square method: Has less spikes %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%estimator = motor_estimator_ekf;
+estimator = motor_estimator_irls;
 
 data = load('sim_log.mat');
 data_size = size(data.time_arr, 2);
@@ -26,7 +34,7 @@ for i = 1:ITERATION_TIMES
     batch =  get_new_batch(data, i, estimator.n);
     
     % Run motor efficiency estimator
-    [x, cond] = estimator.run(i, batch, [0.5; 0.5; 0.5; 0.5], x_last);
+    [x, cond] = estimator.run(batch, [0.5; 0.5; 0.5; 0.5], x_last);
     x_last = x;
     
     disp(x)
