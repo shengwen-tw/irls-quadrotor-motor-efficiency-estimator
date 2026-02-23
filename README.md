@@ -1,6 +1,6 @@
 # Data-Driven Estimation of Quadrotor Motor Efficiency via Residual Minimization
 
-This repository contains the MATLAB implementation of the algorithms presented in our paper **"Data-Driven Estimation of Quadrotor Motor Efficiency via Residual Minimization"** ([arXiv:2510.11388)](https://arxiv.org/abs/2510.11388).
+This repository contains the MATLAB implementation of the algorithms presented in our paper **"Data-Driven Estimation of Quadrotor Motor Efficiency via Residual Minimization"** ([arXiv:2510.11388)](https://arxiv.org/abs/2510.11388) to be appear at the [2026 American Control Conference (ACC)](https://acc2026.a2c2.org/).
 
 
 The method formulates trajectory prediction residuals from quadrotor dynamics and solves a constrained optimization problem to recover motor efficiency parameters. To ensure robustness against outliers, the estimator employs **iteratively reweighted least squares (IRLS)**, combined with a **primal–dual interior-point method** that enforces physical constraints and guarantees numerical stability.  
